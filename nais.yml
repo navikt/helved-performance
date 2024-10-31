@@ -19,3 +19,10 @@ spec:
     requests:
       cpu: 50m
       memory: 32Mi
+  azure:
+    application:
+      enabled: true
+  accessPolicy:
+    outbound:
+      rules:
+        - application: utsjekk
