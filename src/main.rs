@@ -28,7 +28,7 @@ async fn iverksett() -> HttpResponse {
     vedtak.add_utbetaling(utbetaling);
     iverksetting.set_vedtak(vedtak);
 
-    let url = "https://utsjekk.intern.dev.nav.no/api/iverksetting/v2";
+    let url = "http://utsjekk-oppdrag/api/iverksetting/v2";
     match client::post(url, &iverksetting).await {
         Ok(_) => HttpResponse::Ok().finish(),
         Err(_) => HttpResponse::InternalServerError().finish(),
