@@ -7,14 +7,14 @@ mod client;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let host = env_or_default("BIND_ADDRESS", "127.0.0.1");
+    let host = env_or_default("BIND_ADDRESS", "127.0.0.1:8080");
 
     HttpServer::new(|| {
         App::new()
             .route("/health", get().to(is_alive))
             .route("/iverksett", get().to(iverksett))
     })
-        .bind((host, 8080))?
+        .bind(host)?
         .run()
         .await
 }
