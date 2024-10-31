@@ -2,7 +2,7 @@
 
 use reqwest::Response;
 use serde::{Deserialize, Serialize};
-use crate::Iverksetting;
+use crate::{env_or_default, Iverksetting};
 
 pub async fn post(url: &str, iverksetting: &Iverksetting) -> anyhow::Result<Response> {
     let client = reqwest::Client::new();
@@ -36,13 +36,6 @@ async fn get_auth_token() -> anyhow::Result<String> {
     let json = res.json::<AccessTokenBody>().await?;
 
     Ok(json.access_token)
-}
-
-fn env_or_default(key: &str, default: &str) -> String {
-    match std::env::var(key) {
-        Ok(val) => val,
-        Err(_) => default.to_string(),
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]

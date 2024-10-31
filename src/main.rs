@@ -7,14 +7,23 @@ mod client;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    let host = env_or_default("BIND_ADDRESS", "127.0.0.1");
+
     HttpServer::new(|| {
         App::new()
             .route("/health", get().to(is_alive))
             .route("/iverksett", get().to(iverksett))
     })
-        .bind(("0.0.0.0", 8080))?
+        .bind((host, 8080))?
         .run()
         .await
+}
+
+pub fn env_or_default(key: &str, default: &str) -> String {
+    match std::env::var(key) {
+        Ok(val) => val,
+        Err(_) => default.to_string(),
+    }
 }
 
 async fn is_alive() -> HttpResponse {
@@ -31,6 +40,7 @@ async fn iverksett() -> HttpResponse {
     let url = "http://utsjekk-oppdrag/api/iverksetting/v2";
     match client::post(url, &iverksetting).await {
         Ok(_) => HttpResponse::Ok().finish(),
-        Err(_) => HttpResponse::InternalServerError().finish(),
+        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
     }
 }
+
