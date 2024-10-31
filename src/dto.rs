@@ -3,7 +3,7 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 
-const PERSONIDENT: [&'static str; 10] = [
+const PERSONIDENT: [&str; 10] = [
     "07527115366",
     "25528214161",
     "18439049363",
@@ -89,7 +89,7 @@ impl Utbetaling {
                 stønadstype: "DAGPENGER_ARBEIDSSØKER_ORDINÆR".to_string(),
                 ferietillegg: Some(Ferietillegg::ORDINÆR),
                 meldekort_id: "123456".to_string(),
-            }
+            },
         }
     }
 }
@@ -140,6 +140,7 @@ impl Default for Personident {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum SatsType {
     DAGLIG,
     MÅNEDLIG,
@@ -147,6 +148,7 @@ pub enum SatsType {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum Ferietillegg {
     ORDINÆR,
     AVDØD,
