@@ -44,7 +44,7 @@ async fn iverksett() -> HttpResponse {
 
     info!("iverksetter: {:?} ..", iverksetting);
 
-    let url = "http://utsjekk-oppdrag/api/iverksetting/v2";
+    let url = "http://utsjekk/api/iverksetting/v2";
     match client::post(url, &iverksetting).await {
         Ok(res) => {
             info!("response: {:?}", res);
