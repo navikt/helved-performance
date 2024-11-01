@@ -1,5 +1,6 @@
+use actix_web::http::StatusCode;
 use actix_web::web::get;
-use actix_web::{App, HttpResponse, HttpServer};
+use actix_web::{App, HttpResponse, HttpResponseBuilder, HttpServer};
 use dto::*;
 use log::{info, warn, LevelFilter};
 use log4rs::append::console::ConsoleAppender;
@@ -21,7 +22,8 @@ async fn main() -> std::io::Result<()> {
             .route("/iverksett", get().to(iverksett))
     })
     .bind(&host)?
-    .run().await
+    .run()
+    .await
 }
 
 pub fn env_or_default(key: &str, default: &str) -> String {
@@ -45,10 +47,14 @@ async fn iverksett() -> HttpResponse {
     info!("iverksetter: {:?} ..", iverksetting);
 
     let url = "http://utsjekk/api/iverksetting/v2";
+
     match client::post(url, &iverksetting).await {
         Ok(res) => {
-            info!("response: {:?}", res);
-            HttpResponse::Ok().finish()
+            info!("response: {:?}", &res);
+            let status = &res.status().as_u16();
+            let status = StatusCode::from_u16(status.to_owned()).expect("Invalid status code");
+            let body = res.text().await.unwrap();
+            HttpResponseBuilder::new(status).body(body)
         }
         Err(err) => {
             warn!("response: {:?}", err);

@@ -3,17 +3,10 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 
-const PERSONIDENT: [&str; 10] = [
-    "07527115366",
-    "25528214161",
+const PERSONIDENT: [&str; 3] = [
     "18439049363",
-    "05508237989",
     "12460271795",
     "20416818623",
-    "17477021298",
-    "31509349978",
-    "28509533069",
-    "09427128315",
 ];
 
 #[derive(Serialize, Deserialize, Debug)]
