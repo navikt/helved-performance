@@ -127,7 +127,7 @@ pub struct Personident {
 impl Default for Personident {
     fn default() -> Self {
         Personident {
-            verdi: PERSONIDENT[rand::random::<usize>() % 10].to_string(),
+            verdi: PERSONIDENT[rand::random::<usize>() % 3].to_string(),
         }
     }
 }
