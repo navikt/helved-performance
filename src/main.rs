@@ -6,6 +6,7 @@ use server::init_server;
 
 mod client;
 mod dto;
+mod job;
 mod server;
 
 #[actix_web::main]
@@ -29,7 +30,7 @@ fn init_logger() {
     let config = log4rs::Config::builder()
         .appender(Appender::builder().build("stdout", Box::new(stdout)))
         .logger(Logger::builder().build("app::helved-performance", log::LevelFilter::Info))
-        .build(Root::builder().appender("stdout").build(log::LevelFilter::Info))
+        .build(Root::builder().appender("stdout").build(log::LevelFilter::Debug))
         .expect("Failed to build log config");
 
     init_config(config).expect("Failed to init logger");

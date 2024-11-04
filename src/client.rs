@@ -1,10 +1,38 @@
 #![allow(dead_code)]
 
+use actix_web::{http::StatusCode, HttpResponse, HttpResponseBuilder};
+use log::{info, warn};
 use reqwest::Response;
 use serde::{Deserialize, Serialize};
-use crate::{dto::Iverksetting, env_or_default};
+use crate::{dto::*, env_or_default};
 
-pub async fn post(url: &str, iverksetting: &Iverksetting) -> anyhow::Result<Response> {
+pub async fn iverksett() -> HttpResponse {
+    let mut iverksetting = Iverksetting::new();
+    let mut vedtak = Vedtaksdetaljer::new();
+    let utbetaling = Utbetaling::new();
+    vedtak.add_utbetaling(utbetaling);
+    iverksetting.set_vedtak(vedtak);
+
+    info!("iverksetter: {:?} ..", iverksetting);
+
+    let url = "http://utsjekk/api/iverksetting/v2";
+
+    match post(url, &iverksetting).await {
+        Ok(res) => {
+            info!("response: {:?}", &res);
+            let status = &res.status().as_u16();
+            let status = StatusCode::from_u16(status.to_owned()).expect("Invalid status code");
+            let body = res.text().await.unwrap();
+            HttpResponseBuilder::new(status).body(body)
+        }
+        Err(err) => {
+            warn!("response: {:?}", err);
+            HttpResponse::InternalServerError().body(err.to_string())
+        }
+    }
+}
+
+async fn post<T: Serialize>(url: &str, body: &T) -> anyhow::Result<Response> {
     let client = reqwest::Client::new();
     let token = get_auth_token().await?;
 
@@ -13,7 +41,7 @@ pub async fn post(url: &str, iverksetting: &Iverksetting) -> anyhow::Result<Resp
         .header("Content-Type", "application/json")
         .header("Accept", "application/json")
         .header("Authorization", format!("bearer {token}"))
-        .json(iverksetting)
+        .json(body)
         .send()
         .await?;
 
