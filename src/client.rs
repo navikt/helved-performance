@@ -2,7 +2,7 @@
 
 use reqwest::Response;
 use serde::{Deserialize, Serialize};
-use crate::{env_or_default, Iverksetting};
+use crate::{dto::Iverksetting, env_or_default};
 
 pub async fn post(url: &str, iverksetting: &Iverksetting) -> anyhow::Result<Response> {
     let client = reqwest::Client::new();
@@ -42,3 +42,4 @@ async fn get_auth_token() -> anyhow::Result<String> {
 struct AccessTokenBody {
     access_token: String,
 }
+
