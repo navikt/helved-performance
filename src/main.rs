@@ -1,5 +1,7 @@
+use std::sync::Mutex;
+
 use actix_web::http::StatusCode;
-use actix_web::web::get;
+use actix_web::web::{get, Data};
 use actix_web::{App, HttpResponse, HttpResponseBuilder, HttpServer};
 use dto::*;
 use log::{info, warn, LevelFilter};
@@ -16,10 +18,18 @@ async fn main() -> std::io::Result<()> {
     init_logger();
     let host = env_or_default("BIND_ADDRESS", "127.0.0.1:8080");
 
-    HttpServer::new(|| {
+    let state = Data::new(AppState {
+        state: Mutex::new(State::Stopped),
+    });
+
+    HttpServer::new(move || {
         App::new()
+            .app_data(state.clone())
             .route("/health", get().to(is_alive))
             .route("/iverksett", get().to(iverksett))
+            .route("/start", get().to(start))
+            .route("/stop", get().to(stop))
+            .route("/debug", get().to(debug))
     })
     .bind(&host)?
     .run()
@@ -35,6 +45,33 @@ pub fn env_or_default(key: &str, default: &str) -> String {
 
 async fn is_alive() -> HttpResponse {
     HttpResponse::Ok().finish()
+}
+
+struct AppState {
+    state: Mutex<State>,
+}
+
+enum State {
+    Started,
+    Stopped,
+}
+
+async fn debug(data: Data<AppState>) -> HttpResponse {
+    match *data.state.lock().unwrap() {
+        State::Started => HttpResponse::Ok().body("Started"),
+        State::Stopped => HttpResponse::Ok().body("Stopped"),
+    }
+}
+async fn start(data: Data<AppState>) -> HttpResponse {
+    let mut state = data.state.lock().unwrap();
+    *state = State::Started;
+    HttpResponse::Ok().body("Started")
+}
+
+async fn stop(data: Data<AppState>) -> HttpResponse {
+    let mut state = data.state.lock().unwrap();
+    *state = State::Stopped;
+    HttpResponse::Ok().body("Stopped")
 }
 
 async fn iverksett() -> HttpResponse {
