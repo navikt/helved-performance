@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use chrono::{DateTime, NaiveDate, Utc};
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 const PERSONIDENT: [&str; 3] = [
@@ -126,8 +127,9 @@ pub struct Personident {
 
 impl Default for Personident {
     fn default() -> Self {
+        let mut rng = rand::rng();
         Personident {
-            verdi: PERSONIDENT[rand::random::<usize>() % 3].to_string(),
+            verdi: PERSONIDENT[rng.random_range(1..=3)].to_string(),
         }
     }
 }

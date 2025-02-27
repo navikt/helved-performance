@@ -7,6 +7,7 @@ use server::init_server;
 mod client;
 mod dto;
 mod job;
+mod kafka;
 mod server;
 
 #[actix_web::main]

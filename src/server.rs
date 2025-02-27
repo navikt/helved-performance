@@ -2,8 +2,9 @@ use actix_web::web::{self, get, post, Data};
 use actix_web::{App, HttpResponse, HttpServer};
 use log::info;
 use serde::Deserialize;
+use uuid::Uuid;
 
-use crate::client;
+use crate::{client, kafka};
 use crate::job::{JobState, State};
 use crate::{env_or_default, job::init_job};
 
@@ -22,6 +23,7 @@ pub async fn init_server() -> anyhow::Result<()> {
             .route("/sleep", post().to(sleep))
             .route("/debug", get().to(debug))
             .route("/iverksett", get().to(iverksett))
+            .route("/abetal", post().to(abetal))
     })
     .bind(&host)?
     .run()
@@ -78,3 +80,10 @@ async fn debug(data: Data<JobState>) -> HttpResponse {
 async fn iverksett(_: Data<JobState>) -> HttpResponse {
     client::iverksett().await
 }
+
+async fn abetal(json: web::Json<kafka::Utbetaling>) -> HttpResponse {
+    let uid = Uuid::new_v4();
+    kafka::abetal(uid, json.0).await;
+    HttpResponse::Ok().body(uid.to_string())
+}
+
