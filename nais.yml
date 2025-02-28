@@ -4,8 +4,7 @@ metadata:
   name: helved-performance
   namespace: helved
 spec:
-  ingresses:
-    - https://helved-performance.intern.dev.nav.no
+  ingresses: [ https://helved-performance.intern.dev.nav.no ]
   liveness:
     path: /health
   readiness:
@@ -17,7 +16,7 @@ spec:
     min: 1
   resources:
     requests:
-      cpu: 150m
+      cpu: 50m
       memory: 32Mi
   azure:
     application:
@@ -28,4 +27,3 @@ spec:
     outbound:
       rules:
         - application: utsjekk
-        - application: abetal
