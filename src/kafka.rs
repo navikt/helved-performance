@@ -49,13 +49,13 @@ pub struct Utbetaling
 {
     simulate: bool,
     action: Action,
-    sak_id: SakId,
-    behandling_id: BehandlingId,
-    personident: Personident,
+    sak_id: String,
+    behandling_id: String,
+    personident: String,
     vedtakstidspunkt: DateTime<Utc>,
     stønad: String,
-    beslutter_id: Navident,
-    saksbehandler_id: Navident,
+    beslutter_id: String,
+    saksbehandler_id: String,
     periodetype: Periodetype,
     perioder: Vec<Utbetalingsperiode>,
 }
@@ -66,7 +66,7 @@ pub struct Utbetalingsperiode {
     fom: NaiveDate,
     tom: NaiveDate,
     beløp: u32,
-    betalende_enhet: Option<NavEnhet>,
+    betalende_enhet: Option<String>,
     fastsatt_dagsats: Option<u32>,
 }
 
@@ -86,19 +86,4 @@ pub enum Periodetype {
     Mnd,
     EnGang,
 }
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct SakId { id: String }
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct BehandlingId { id: String }
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Personident { ident: String }
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Navident { ident: String }
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct NavEnhet { enhet: String }
 
