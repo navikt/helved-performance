@@ -1,10 +1,12 @@
-use std::{env, hash::{DefaultHasher, Hash, Hasher}, time::Duration};
-
+use std::{env, hash::Hasher, time::Duration};
 use chrono::{DateTime, NaiveDate, Utc};
 use log::{error, info};
 use rdkafka::{producer::{FutureProducer, FutureRecord}, ClientConfig};
 use serde::{Deserialize, Serialize};
+use twox_hash::XxHash32;
 use uuid::Uuid;
+
+const NUM_PARTITIONS: i32 = 3;
 
 pub async fn abetal(uid: Uuid, utbet: Utbetaling)
 {
@@ -38,9 +40,10 @@ fn producer(client_id: &str) -> FutureProducer
 
 fn partition(key: Uuid) -> i32
 {
-    let mut hasher = DefaultHasher::new();
-    key.to_string().hash(&mut hasher);
-    (hasher.finish() % 3) as i32
+    let mut hasher = XxHash32::with_seed(0); // seed 0 like kakfa's murmur2
+    hasher.write(key.to_string().as_bytes());
+    let hash = hasher.finish() as i32;
+    (hash & 0x7fffffff) % NUM_PARTITIONS // ensure positive result
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -87,3 +90,15 @@ pub enum Periodetype {
     EnGang,
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_partition_consistency() {
+        let key = Uuid::new_v4();
+        let p1 = partition(key);
+        let p2 = partition(key);
+        assert_eq!(p1, p2, "Partitioning should be consistent for the same key");
+    }
+}
