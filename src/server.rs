@@ -83,7 +83,10 @@ async fn iverksett(_: Data<JobState>) -> HttpResponse {
 
 async fn abetal(json: web::Json<kafka::Utbetaling>) -> HttpResponse {
     let uid = Uuid::new_v4();
-    kafka::abetal(uid, json.0).await;
-    HttpResponse::Ok().body(uid.to_string())
+    info!("Record sent: {:?}", uid);
+    match kafka::abetal(uid, json.0).await {
+        Some(status) => HttpResponse::Ok().json(status),
+        None => HttpResponse::Accepted().finish(),
+    }
 }
 
