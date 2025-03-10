@@ -1,15 +1,16 @@
-use std::{collections::HashMap, env, hash::Hasher, time::{Duration, Instant}};
-use actix_web::rt::spawn;
+use std::{env, hash::Hasher, sync::Arc, time::Duration};
 use chrono::{DateTime, NaiveDate, Utc};
 use log::{error, info};
-use rdkafka::{consumer::{BaseConsumer, Consumer}, producer::{FutureProducer, FutureRecord}, ClientConfig, Message, Offset, TopicPartitionList};
+use rdkafka::{consumer::{BaseConsumer, Consumer}, producer::{FutureProducer, FutureRecord}, ClientConfig, Message};
 use serde::{Deserialize, Serialize};
 use twox_hash::XxHash32;
 use uuid::Uuid;
 
+use crate::server::Channel;
+
 const NUM_PARTITIONS: i32 = 3;
 
-pub async fn abetal(uid: Uuid, utbet: Utbetaling) -> Option<StatusReply>
+pub async fn abetal(uid: Uuid, utbet: Utbetaling)
 {
     let producer = producer("perf-abetal-aap");
     let key = uid.to_string();
@@ -19,48 +20,39 @@ pub async fn abetal(uid: Uuid, utbet: Utbetaling) -> Option<StatusReply>
         .payload(&value)
         .partition(partition(uid));
 
-    let handle = spawn(wait_for_status(uid));
-
     match producer.send(record, Duration::from_secs(5)).await {
         Ok(delivery) => info!("Record sent: {:?}", delivery),
         Err((err, msg)) => error!("Failed to send record: {:?} msg: {:?}", err, msg),
     };
-
-    handle.await.unwrap()
 }
 
-async fn wait_for_status(uid: Uuid) -> Option<StatusReply> {
-    let start = Instant::now();
+pub async fn status_listener(channel: Arc<Channel>) {
+    let tx = &channel.status.lock().unwrap().0;
+    let rx = &channel.uid.lock().unwrap().1;
     let consumer = consumer("perf-abetal-status");
-    // consumer.subscribe(&["helved.status.v1"]).expect("subscribe to status-topic");
-    let topic_map = HashMap::from([(("helved.status.v1".into(), partition(uid)), Offset::End)]);
-    let tpl = TopicPartitionList::from_topic_map(&topic_map).expect("topic partition list");
-    consumer.assign(&tpl).expect("assign offset to status-topic");
-    consumer.seek("helved.status.v1", partition(uid), Offset::End, Duration::from_secs(10)).unwrap();
-    let mut last_state: Option<StatusReply> = None;
+    consumer.subscribe(&["helved.status.v1"]).expect("subscribe to status-topic");
+    let mut current_uid: Option<Uuid> = None;
     loop {
-        match consumer.poll(Duration::from_secs(1)) {
-            Some(result) => {
+        if let Ok(uid) = rx.try_recv() {
+            current_uid = Some(uid);
+        }
+        if let Some(uid) = current_uid {
+            if let Some(result) = consumer.poll(Duration::from_secs(1)) {
                 let record = result.expect("kafka message");
-                if uid.to_string() != std::str::from_utf8(record.key().expect("key")).expect("str") { continue };
+                if uid.to_string() != std::str::from_utf8(record.key().expect("key")).expect("str") { 
+                    continue 
+                };
                 let payload = record.payload().expect("payload");
                 let json = std::str::from_utf8(payload).unwrap();
                 info!("Record received: {}", json);
-                last_state = Some(serde_json::from_str(json).unwrap()); 
-                match last_state.clone().unwrap().status  {
-                    Status::Ok | Status::Feilet => {
-                        consumer.unsubscribe();
-                        return last_state;
-                    },
-                    _ => {}
-                }
-            },
-            None => {
-                if start.elapsed() >= Duration::from_secs(30) {
-                    consumer.unsubscribe();
-                    return last_state;
-                }
-            },
+                let state: StatusReply = serde_json::from_str(json).unwrap(); 
+                let _ = tx.send(state.clone());
+                match state.status {
+                    Status::Ok => current_uid = None,
+                    Status::Feilet => current_uid = None,
+                    _ => {},
+                } 
+            };
         };
     }
 }
@@ -154,7 +146,7 @@ pub enum Periodetype {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct StatusReply {
-    status: Status,
+    pub status: Status,
     error: Option<ApiError>,
 }
 

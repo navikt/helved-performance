@@ -1,9 +1,16 @@
+use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{mpsc, Arc, Mutex};
+use std::time::{Duration, Instant};
+
+use actix_web::rt::spawn;
 use actix_web::web::{self, get, post, Data};
-use actix_web::{App, HttpResponse, HttpServer};
+use actix_web::{post, App, HttpResponse, HttpServer};
 use log::info;
 use serde::Deserialize;
+use uuid::Uuid;
 
-use crate::client;
+use crate::kafka::StatusReply;
+use crate::{client, kafka};
 use crate::job::{JobState, State};
 use crate::{env_or_default, job::init_job};
 
@@ -13,8 +20,11 @@ pub async fn init_server() -> anyhow::Result<()> {
     let (job_state, job_handle) = init_job();
     info!("jobs state {:?}", &job_state);
 
+    let channel = Arc::new(Channel::default());
+    let handle = spawn(kafka::status_listener(channel.clone()));
     let _ = HttpServer::new(move || {
         App::new()
+            .app_data(Data::from(channel.clone()))
             .app_data(Data::from(job_state.clone()))
             .route("/health", get().to(health))
             .route("/start", get().to(start))
@@ -22,15 +32,14 @@ pub async fn init_server() -> anyhow::Result<()> {
             .route("/sleep", post().to(sleep))
             .route("/debug", get().to(debug))
             .route("/iverksett", get().to(iverksett))
-            .service(abetal::new)
-            .service(abetal::update)
-            .service(abetal::delete)
+            .service(abetal)
     })
     .bind(&host)?
     .run()
     .await;
 
     job_handle.await.unwrap();
+    handle.await.unwrap();
 
     Ok(())
 }
@@ -82,42 +91,50 @@ async fn iverksett(_: Data<JobState>) -> HttpResponse {
     client::iverksett().await
 }
 
-mod abetal {
-    use actix_web::*;
-    use uuid::Uuid;
-
-    use crate::kafka;
-
-    #[post("/abetal/{uid}")]
-    async fn new(uid: web::Path<Uuid>, json: web::Json<kafka::Utbetaling>) -> HttpResponse {
-        match kafka::abetal(uid.into_inner(), json.0).await {
-            Some(status) => HttpResponse::Ok().json(status),
-            None => HttpResponse::Accepted().finish(),
-        }
+#[post("/abetal/{uid}")]
+async fn abetal(
+    data: Data<Channel>,
+    uid: web::Path<Uuid>,
+    json: web::Json<kafka::Utbetaling>,
+) -> HttpResponse {
+    let uid = uid.into_inner();
+    {
+        let tx = &data.uid.lock().unwrap().0;
+        tx.send(uid).unwrap();
     }
 
-    #[put("/abetal/{uid}")]
-    async fn update(uid: web::Path<Uuid>, json: web::Json<kafka::Utbetaling>) -> HttpResponse {
-        match kafka::abetal(uid.into_inner(), json.0).await {
-            Some(status) => HttpResponse::Ok().json(status),
-            None => HttpResponse::Accepted().finish(),
-        }
-    }
+    kafka::abetal(uid, json.0).await; 
 
-    #[delete("/abetal/{uid}")]
-    async fn delete(uid: web::Path<Uuid>, json: web::Json<kafka::Utbetaling>) -> HttpResponse {
-        match kafka::abetal(uid.into_inner(), json.0).await {
-            Some(status) => HttpResponse::Ok().json(status),
-            None => HttpResponse::Accepted().finish(),
+    let start = Instant::now();
+    let mut last_status: Option<StatusReply> = None;
+    loop {
+        if start.elapsed() >= Duration::from_secs(30) {
+            return match last_status {
+                Some(status) => HttpResponse::Ok().json(status),
+                None => HttpResponse::Accepted().finish(),
+            };
+        }
+
+        let rx = &data.status.lock().unwrap().1;
+        if let Ok(rec) = rx.recv_timeout(Duration::from_secs(1)) {
+            match rec.status {
+                kafka::Status::Ok | kafka::Status::Feilet => return HttpResponse::Ok().json(rec),
+                _ => last_status = Some(rec),
+            }
         }
     }
 }
-// async fn abetal(json: web::Json<kafka::Utbetaling>) -> HttpResponse {
-//     let uid = Uuid::new_v4();
-//     info!("Record sent: {:?}", uid);
-//     match kafka::abetal(uid, json.0).await {
-//         Some(status) => HttpResponse::Ok().json(status),
-//         None => HttpResponse::Accepted().finish(),
-//     }
-// }
 
+pub struct Channel {
+    pub status: Mutex<(Sender<StatusReply>, Receiver<StatusReply>)>,
+    pub uid: Mutex<(Sender<Uuid>, Receiver<Uuid>)>,
+}
+
+impl Default for Channel {
+    fn default() -> Self {
+        Channel {
+            status: Mutex::new(mpsc::channel()),
+            uid: Mutex::new(mpsc::channel()),
+        }
+    }
+}

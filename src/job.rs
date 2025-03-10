@@ -32,7 +32,6 @@ pub enum State {
 pub fn init_job() -> (Arc<JobState>, JoinHandle<()>) {
     let state = Arc::new(JobState::default());
     let handle = spawn(background_job(state.clone()));
-
     (state.clone(), handle)
 }
 
