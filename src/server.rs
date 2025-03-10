@@ -2,9 +2,8 @@ use actix_web::web::{self, get, post, Data};
 use actix_web::{App, HttpResponse, HttpServer};
 use log::info;
 use serde::Deserialize;
-use uuid::Uuid;
 
-use crate::{client, kafka};
+use crate::client;
 use crate::job::{JobState, State};
 use crate::{env_or_default, job::init_job};
 
@@ -23,7 +22,9 @@ pub async fn init_server() -> anyhow::Result<()> {
             .route("/sleep", post().to(sleep))
             .route("/debug", get().to(debug))
             .route("/iverksett", get().to(iverksett))
-            .route("/abetal", post().to(abetal))
+            .service(abetal::new)
+            .service(abetal::update)
+            .service(abetal::delete)
     })
     .bind(&host)?
     .run()
@@ -81,12 +82,42 @@ async fn iverksett(_: Data<JobState>) -> HttpResponse {
     client::iverksett().await
 }
 
-async fn abetal(json: web::Json<kafka::Utbetaling>) -> HttpResponse {
-    let uid = Uuid::new_v4();
-    info!("Record sent: {:?}", uid);
-    match kafka::abetal(uid, json.0).await {
-        Some(status) => HttpResponse::Ok().json(status),
-        None => HttpResponse::Accepted().finish(),
+mod abetal {
+    use actix_web::*;
+    use uuid::Uuid;
+
+    use crate::kafka;
+
+    #[post("/abetal/{uid}")]
+    async fn new(uid: web::Path<Uuid>, json: web::Json<kafka::Utbetaling>) -> HttpResponse {
+        match kafka::abetal(uid.into_inner(), json.0).await {
+            Some(status) => HttpResponse::Ok().json(status),
+            None => HttpResponse::Accepted().finish(),
+        }
+    }
+
+    #[put("/abetal/{uid}")]
+    async fn update(uid: web::Path<Uuid>, json: web::Json<kafka::Utbetaling>) -> HttpResponse {
+        match kafka::abetal(uid.into_inner(), json.0).await {
+            Some(status) => HttpResponse::Ok().json(status),
+            None => HttpResponse::Accepted().finish(),
+        }
+    }
+
+    #[delete("/abetal/{uid}")]
+    async fn delete(uid: web::Path<Uuid>, json: web::Json<kafka::Utbetaling>) -> HttpResponse {
+        match kafka::abetal(uid.into_inner(), json.0).await {
+            Some(status) => HttpResponse::Ok().json(status),
+            None => HttpResponse::Accepted().finish(),
+        }
     }
 }
+// async fn abetal(json: web::Json<kafka::Utbetaling>) -> HttpResponse {
+//     let uid = Uuid::new_v4();
+//     info!("Record sent: {:?}", uid);
+//     match kafka::abetal(uid, json.0).await {
+//         Some(status) => HttpResponse::Ok().json(status),
+//         None => HttpResponse::Accepted().finish(),
+//     }
+// }
 

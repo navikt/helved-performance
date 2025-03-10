@@ -75,7 +75,11 @@ fn producer(client_id: &str) -> FutureProducer
         .set("ssl.certificate.location", env::var("KAFKA_CERTIFICATE_PATH").expect("KAFKA_CERTIFICATE_PATH"))
         .set("ssl.ca.location", env::var("KAFKA_CA_PATH").expect("KAFKA_CA_PATH"))
         .create()
-        .unwrap_or_else(|_| panic!("Failed to create kafka producer {client_id}"))
+        .unwrap_or_else(|_| { 
+                error!("Failed to create kafka producer {client_id}");
+                panic!("Failed to create kafka producer {client_id}")
+            }
+        )
 }
 
 fn consumer(client_id: &str) -> BaseConsumer  
