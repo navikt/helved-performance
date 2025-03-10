@@ -92,7 +92,6 @@ fn consumer(client_id: &str) -> BaseConsumer
         .set("auto.offset.reset", "latest")
         .set("enable.auto.commit", "false")
         .set("session.timeout.ms", "6000")
-        .set("compression.codec", "snappy")
         .set("security.protocol", "ssl")
         .set("ssl.key.location", env::var("KAFKA_PRIVATE_KEY_PATH").expect("KAFKA_PRIVATE_KEY_PATH"))
         .set("ssl.certificate.location", env::var("KAFKA_CERTIFICATE_PATH").expect("KAFKA_CERTIFICATE_PATH"))
