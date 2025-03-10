@@ -36,7 +36,7 @@ async fn wait_for_status(uid: Uuid) -> Option<StatusReply> {
     let topic_map = HashMap::from([(("helved.status.v1".into(), partition(uid)), Offset::End)]);
     let tpl = TopicPartitionList::from_topic_map(&topic_map).expect("topic partition list");
     consumer.assign(&tpl).expect("assign offset to status-topic");
-    consumer.seek("helved.status.v1", partition(uid), Offset::End, Duration::from_secs(1)).unwrap();
+    consumer.seek("helved.status.v1", partition(uid), Offset::End, Duration::from_secs(10)).unwrap();
     let mut last_state: Option<StatusReply> = None;
     loop {
         match consumer.poll(Duration::from_secs(1)) {
