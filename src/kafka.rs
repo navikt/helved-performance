@@ -19,12 +19,13 @@ pub async fn abetal(uid: Uuid, utbet: Utbetaling) -> Option<StatusReply>
         .payload(&value)
         .partition(partition(uid));
 
+    let handle = spawn(wait_for_status(uid));
+
     match producer.send(record, Duration::from_secs(5)).await {
         Ok(delivery) => info!("Record sent: {:?}", delivery),
         Err((err, msg)) => error!("Failed to send record: {:?} msg: {:?}", err, msg),
     };
 
-    let handle = spawn(wait_for_status(uid));
     handle.await.unwrap()
 }
 
