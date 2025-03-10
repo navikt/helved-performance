@@ -31,7 +31,7 @@ pub async fn abetal(uid: Uuid, utbet: Utbetaling) -> Option<StatusReply>
 async fn wait_for_status(uid: Uuid) -> Option<StatusReply> {
     let start = Instant::now();
     let consumer = consumer("perf-abetal-status");
-    consumer.subscribe(&["helved.status.v1"]).expect("subscribe to status-topic");
+    // consumer.subscribe(&["helved.status.v1"]).expect("subscribe to status-topic");
     let topic_map = HashMap::from([(("helved.status.v1".into(), partition(uid)), Offset::End)]);
     let tpl = TopicPartitionList::from_topic_map(&topic_map).expect("topic partition list");
     consumer.assign(&tpl).expect("assign offset to status-topic");
