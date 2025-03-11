@@ -1,12 +1,10 @@
-use std::{env, hash::Hasher, sync::Arc, time::Duration};
+use std::{env, hash::Hasher, sync::{mpsc::{self, Receiver, Sender}, Arc, Mutex}, time::Duration};
 use chrono::{DateTime, NaiveDate, Utc};
 use log::{error, info};
 use rdkafka::{consumer::{BaseConsumer, Consumer}, producer::{FutureProducer, FutureRecord}, ClientConfig, Message};
 use serde::{Deserialize, Serialize};
 use twox_hash::XxHash32;
 use uuid::Uuid;
-
-use crate::server::Channel;
 
 const NUM_PARTITIONS: i32 = 3;
 
@@ -98,6 +96,20 @@ fn partition(key: Uuid) -> i32
     hasher.write(key.to_string().as_bytes());
     let hash = hasher.finish() as i32;
     (hash & 0x7fffffff) % NUM_PARTITIONS // ensure positive result
+}
+
+pub struct Channel {
+    pub status: Mutex<(Sender<StatusReply>, Receiver<StatusReply>)>,
+    pub uid: Mutex<(Sender<Uuid>, Receiver<Uuid>)>,
+}
+
+impl Default for Channel {
+    fn default() -> Self {
+        Channel {
+            status: Mutex::new(mpsc::channel()),
+            uid: Mutex::new(mpsc::channel()),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]

@@ -5,7 +5,7 @@ use std::{
 
 use actix_web::rt::{spawn, task::JoinHandle, time::sleep};
 
-use crate::client;
+use crate::utsjekk;
 
 #[derive(Debug)]
 pub struct JobState {
@@ -39,7 +39,7 @@ async fn background_job(job_state: Arc<JobState>) {
     loop {
         let state = *job_state.state.lock().unwrap();
         if let State::Started = state {
-            client::iverksett().await;
+            utsjekk::iverksett().await;
         }
 
         let sleep_ms = *job_state.sleep_ms.lock().unwrap();
