@@ -1,4 +1,5 @@
 use std::time::{Duration, Instant};
+use actix_web::rt::time::sleep;
 use actix_web::web::{self, Data};
 use actix_web::{get, post, HttpResponse};
 use log::info;
@@ -36,17 +37,22 @@ pub async fn abetal(
     let start = Instant::now();
     let mut last_status: Option<kafka::StatusReply> = None;
     loop {
-        if start.elapsed() >= Duration::from_secs(30) {
+        if start.elapsed() >= Duration::from_secs(50) { // simulering kan være treg
             break;
         }
-        let rx = &data.status.lock().unwrap().1;
-        if let Ok(rec) = rx.recv_timeout(Duration::from_secs(1)) {
-            last_status = Some(rec.clone());
-            match rec.status {
-                kafka::Status::Ok | kafka::Status::Feilet => break,
-                _ => {},
+        {
+            let rx = &data.status.lock().unwrap().1;
+            if let Ok(rec) = rx.recv_timeout(Duration::from_millis(10)) {
+                last_status = Some(rec.clone());
+                match rec.status {
+                    kafka::Status::Mottatt    => {},
+                    kafka::Status::HosOppdrag => {},
+                    kafka::Status::Feilet     => break,
+                    kafka::Status::Ok         => break,
+                }
             }
         }
+        sleep(Duration::from_millis(1)).await;
     }
     match last_status {
         Some(status) => HttpResponse::Ok().json(status),

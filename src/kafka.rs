@@ -1,4 +1,5 @@
 use std::{env, hash::Hasher, sync::{mpsc::{self, Receiver, Sender}, Arc, Mutex}, time::Duration};
+use actix_web::rt::{spawn, task::JoinHandle, time::sleep};
 use chrono::{DateTime, NaiveDate, Utc};
 use log::{error, info};
 use rdkafka::{consumer::{BaseConsumer, Consumer}, producer::{FutureProducer, FutureRecord}, ClientConfig, Message};
@@ -24,18 +25,29 @@ pub async fn abetal(uid: Uuid, utbet: Utbetaling)
     };
 }
 
-pub async fn status_listener(channel: Arc<Channel>) {
-    let tx = &channel.status.lock().unwrap().0;
-    let rx = &channel.uid.lock().unwrap().1;
+pub fn init_status_consumer() -> (Arc<Channel>, JoinHandle<()>)
+{
+    let channel = Arc::new(Channel::default());
+    let handle = spawn(status_consumer(channel.clone()));
+    (channel.clone(), handle)
+}
+
+async fn status_consumer(channel: Arc<Channel>) {
     let consumer = consumer("perf-abetal-status");
     consumer.subscribe(&["helved.status.v1"]).expect("subscribe to status-topic");
     let mut current_uid: Option<Uuid> = None;
     loop {
-        if let Ok(uid) = rx.try_recv() {
-            current_uid = Some(uid);
+        if !*channel.active.lock().unwrap() {
+            break;
+        }
+        {
+            let rx = &channel.uid.lock().unwrap().1;
+            if let Ok(uid) = rx.recv_timeout(Duration::from_millis(10)) {
+                current_uid = Some(uid);
+            }
         }
         if let Some(uid) = current_uid {
-            if let Some(result) = consumer.poll(Duration::from_secs(1)) {
+            if let Some(result) = consumer.poll(Duration::from_millis(10)) {
                 let record = result.expect("kafka message");
                 if uid.to_string() != std::str::from_utf8(record.key().expect("key")).expect("str") { 
                     continue 
@@ -44,7 +56,10 @@ pub async fn status_listener(channel: Arc<Channel>) {
                 let json = std::str::from_utf8(payload).unwrap();
                 info!("Record received: {}", json);
                 let state: StatusReply = serde_json::from_str(json).unwrap(); 
-                let _ = tx.send(state.clone());
+                {
+                    let tx = &channel.status.lock().unwrap().0;
+                    tx.send(state.clone()).unwrap();
+                }
                 match state.status {
                     Status::Ok => current_uid = None,
                     Status::Feilet => current_uid = None,
@@ -52,7 +67,11 @@ pub async fn status_listener(channel: Arc<Channel>) {
                 } 
             };
         };
+
+        sleep(Duration::from_millis(1)).await;
     }
+
+    consumer.unsubscribe();
 }
 
 fn producer(client_id: &str) -> FutureProducer
@@ -99,13 +118,21 @@ fn partition(key: Uuid) -> i32
 }
 
 pub struct Channel {
+    active: Mutex<bool>,
     pub status: Mutex<(Sender<StatusReply>, Receiver<StatusReply>)>,
     pub uid: Mutex<(Sender<Uuid>, Receiver<Uuid>)>,
+}
+
+impl Channel {
+    pub fn disable(&self) {
+        *self.active.lock().unwrap() = false
+    }
 }
 
 impl Default for Channel {
     fn default() -> Self {
         Channel {
+            active: Mutex::new(true),
             status: Mutex::new(mpsc::channel()),
             uid: Mutex::new(mpsc::channel()),
         }
