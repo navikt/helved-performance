@@ -9,11 +9,11 @@ use uuid::Uuid;
 
 const NUM_PARTITIONS: i32 = 3;
 
-pub async fn abetal(uid: Uuid, utbet: Utbetaling)
+pub async fn abetal(uid: Uuid, utbet: &Utbetaling)
 {
     let producer = producer("perf-abetal-aap");
     let key = uid.to_string();
-    let value = serde_json::to_string(&utbet).expect("failed to serialize");
+    let value = serde_json::to_string(utbet).expect("failed to serialize");
     let record = FutureRecord::to("helved.aap-utbetalinger.v1")
         .key(&key)
         .payload(&value)
@@ -25,14 +25,14 @@ pub async fn abetal(uid: Uuid, utbet: Utbetaling)
     };
 }
 
-pub fn init_status_consumer() -> (Arc<Channel>, JoinHandle<()>)
+pub fn init_status_consumer() -> (Arc<Channel<StatusReply>>, JoinHandle<()>)
 {
     let channel = Arc::new(Channel::default());
     let handle = spawn(status_consumer(channel.clone()));
     (channel.clone(), handle)
 }
 
-async fn status_consumer(channel: Arc<Channel>) {
+async fn status_consumer(channel: Arc<Channel<StatusReply>>) {
     let consumer = consumer("perf-abetal-status");
     consumer.subscribe(&["helved.status.v1"]).expect("subscribe to status-topic");
     let mut current_uid: Option<Uuid> = None;
@@ -57,7 +57,7 @@ async fn status_consumer(channel: Arc<Channel>) {
                 info!("Record received: {}", json);
                 let state: StatusReply = serde_json::from_str(json).unwrap(); 
                 {
-                    let tx = &channel.status.lock().unwrap().0;
+                    let tx = &channel.result.lock().unwrap().0;
                     tx.send(state.clone()).unwrap();
                 }
                 match state.status {
@@ -65,6 +65,49 @@ async fn status_consumer(channel: Arc<Channel>) {
                     Status::Feilet => current_uid = None,
                     _ => {},
                 } 
+            };
+        };
+
+        sleep(Duration::from_millis(1)).await;
+    }
+
+    consumer.unsubscribe();
+}
+
+pub fn init_aap_simulering_consumer() -> (Arc<Channel<Simulering>>, JoinHandle<()>)
+{
+    let channel = Arc::new(Channel::default());
+    let handle = spawn(aap_simulering_consumer(channel.clone()));
+    (channel.clone(), handle)
+}
+
+async fn aap_simulering_consumer(channel: Arc<Channel<Simulering>>) {
+    let consumer = consumer("perf-aap-simulering");
+    consumer.subscribe(&["helved.aap-simulering.v1"]).expect("subscribe to aap-simulering-topic");
+    let mut current_uid: Option<Uuid> = None;
+    loop {
+        if !*channel.active.lock().unwrap() {
+            break;
+        }
+        {
+            let rx = &channel.uid.lock().unwrap().1;
+            if let Ok(uid) = rx.recv_timeout(Duration::from_millis(10)) {
+                current_uid = Some(uid);
+            }
+        }
+        if let Some(uid) = current_uid {
+            if let Some(result) = consumer.poll(Duration::from_millis(10)) {
+                let record = result.expect("kafka message");
+                if uid.to_string() != std::str::from_utf8(record.key().expect("key")).expect("str") { 
+                    continue 
+                };
+                let payload = record.payload().expect("payload");
+                let json = std::str::from_utf8(payload).unwrap();
+                info!("Record received: {}", json);
+                let simulering: Simulering = serde_json::from_str(json).unwrap(); 
+                let tx = &channel.result.lock().unwrap().0;
+                tx.send(simulering.clone()).unwrap();
+                current_uid = None
             };
         };
 
@@ -117,23 +160,23 @@ fn partition(key: Uuid) -> i32
     (hash & 0x7fffffff) % NUM_PARTITIONS // ensure positive result
 }
 
-pub struct Channel {
+pub struct Channel<T> {
     active: Mutex<bool>,
-    pub status: Mutex<(Sender<StatusReply>, Receiver<StatusReply>)>,
+    pub result: Mutex<(Sender<T>, Receiver<T>)>,
     pub uid: Mutex<(Sender<Uuid>, Receiver<Uuid>)>,
 }
 
-impl Channel {
+impl <T> Channel<T> {
     pub fn disable(&self) {
         *self.active.lock().unwrap() = false
     }
 }
 
-impl Default for Channel {
+impl <T> Default for Channel<T> {
     fn default() -> Self {
         Channel {
             active: Mutex::new(true),
-            status: Mutex::new(mpsc::channel()),
+            result: Mutex::new(mpsc::channel()),
             uid: Mutex::new(mpsc::channel()),
         }
     }
@@ -143,7 +186,7 @@ impl Default for Channel {
 #[serde(rename_all = "camelCase")]
 pub struct Utbetaling 
 {
-    simulate: bool,
+    pub simulate: bool,
     action: Action,
     sak_id: String,
     behandling_id: String,
@@ -204,6 +247,31 @@ pub enum Status {
     Feilet,
     Mottatt,
     HosOppdrag,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Simulering {
+    perioder: Vec<SimuleringPeriode>
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SimuleringPeriode {
+    fom: NaiveDate,
+    tom: NaiveDate,
+    utbetalinger: Vec<SimuleringUtbetaling>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SimuleringUtbetaling {
+    fagsystem: String,
+    sak_id: String,
+    utbetales_til: String,
+    stønadstype: String,
+    tidligere_utbetalt: i32,
+    nytt_beløp: i32,
 }
 
 #[cfg(test)]

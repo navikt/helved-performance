@@ -25,10 +25,15 @@ pub async fn init_server() -> anyhow::Result<()> {
     info!("jobs state {:?}", &job_state);
 
     let (kafka_status_consumer, kafka_status_handle) = kafka::init_status_consumer();
-    let channel = kafka_status_consumer.clone();
+    let status_channel = kafka_status_consumer.clone();
+
+    let (kafka_aap_simulering_consumer, kafka_aap_simulering_handle) = kafka::init_aap_simulering_consumer();
+    let aap_simulering_channel = kafka_aap_simulering_consumer.clone();
+
     let _ = HttpServer::new(move || {
         App::new()
-            .app_data(Data::from(channel.clone()))
+            .app_data(Data::from(status_channel.clone()))
+            .app_data(Data::from(aap_simulering_channel.clone()))
             .app_data(Data::from(job_state.clone()))
             .service(routes::abetal)
             .service(routes::iverksett)
@@ -43,8 +48,12 @@ pub async fn init_server() -> anyhow::Result<()> {
     .await;
 
     kafka_status_consumer.disable();
-    job_handle.await.unwrap();
     kafka_status_handle.await.unwrap();
+
+    kafka_aap_simulering_consumer.disable();
+    kafka_aap_simulering_handle.await.unwrap();
+
+    job_handle.await.unwrap();
 
     Ok(())
 }

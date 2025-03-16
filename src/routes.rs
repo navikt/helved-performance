@@ -22,26 +22,41 @@ pub async fn iverksett(_: Data<job::JobState>) -> HttpResponse {
 
 #[post("/abetal/{uid}")]
 pub async fn abetal(
-    data: Data<kafka::Channel>,
+    status: Data<kafka::Channel<kafka::StatusReply>>,
+    simulering: Data<kafka::Channel<kafka::Simulering>>,
     uid: web::Path<Uuid>,
     json: web::Json<kafka::Utbetaling>,
 ) -> HttpResponse {
     let uid = uid.into_inner();
     {
-        let tx = &data.uid.lock().unwrap().0;
+        let tx = &status.uid.lock().unwrap().0;
         tx.send(uid).unwrap();
     }
 
-    kafka::abetal(uid, json.0).await; 
+    if json.0.simulate {
+        let tx = &simulering.uid.lock().unwrap().0;
+        tx.send(uid).unwrap();
+    }
+
+    kafka::abetal(uid, &json.0).await; 
 
     let start = Instant::now();
     let mut last_status: Option<kafka::StatusReply> = None;
+    let mut simulering_result: Option<kafka::Simulering> = None;
     loop {
         if start.elapsed() >= Duration::from_secs(50) { // simulering kan være treg
             break;
         }
         {
-            let rx = &data.status.lock().unwrap().1;
+            if json.0.simulate {
+                let rx = &simulering.result.lock().unwrap().1;
+                if let Ok(rec) = rx.recv_timeout(Duration::from_millis(10)) {
+                    simulering_result = Some(rec.clone());
+                    break;
+                }
+            }
+
+            let rx = &status.result.lock().unwrap().1;
             if let Ok(rec) = rx.recv_timeout(Duration::from_millis(10)) {
                 last_status = Some(rec.clone());
                 match rec.status {
@@ -54,6 +69,11 @@ pub async fn abetal(
         }
         sleep(Duration::from_millis(1)).await;
     }
+
+    if let Some(sim) = simulering_result {
+        return HttpResponse::Ok().json(sim);
+    };
+
     match last_status {
         Some(status) => HttpResponse::Ok().json(status),
         None => HttpResponse::Accepted().finish(),
