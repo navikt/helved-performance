@@ -12,7 +12,9 @@ COPY . .
 RUN cargo build --release --bin helved-performance
 
 FROM debian:bookworm-slim AS runtime
-RUN apt-get update && apt install -y openssl
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssl \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /app/target/release/helved-performance /usr/local/bin
 ENTRYPOINT ["/usr/local/bin/helved-performance"]
