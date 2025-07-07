@@ -1,14 +1,11 @@
 use actix_web::web::Data;
 use actix_web::{App, HttpServer};
-use job::init_job;
-use log::info;
 use log4rs::append::console::ConsoleAppender;
 use log4rs::config::*;
 use log4rs::encode::json::JsonEncoder;
 use log4rs::init_config;
 
-mod utsjekk;
-mod job;
+mod models;
 mod kafka;
 mod routes;
 
@@ -21,9 +18,6 @@ async fn main() -> anyhow::Result<()> {
 pub async fn init_server() -> anyhow::Result<()> {
     let host = env_or_default("BIND_ADDRESS", "127.0.0.1:8080");
 
-    let (job_state, job_handle) = init_job();
-    info!("jobs state {:?}", &job_state);
-
     let (kafka_status_consumer, kafka_status_handle) = kafka::init_status_consumer();
     let status_channel = kafka_status_consumer.clone();
 
@@ -34,14 +28,8 @@ pub async fn init_server() -> anyhow::Result<()> {
         App::new()
             .app_data(Data::from(status_channel.clone()))
             .app_data(Data::from(aap_simulering_channel.clone()))
-            .app_data(Data::from(job_state.clone()))
             .service(routes::abetal)
-            .service(routes::iverksett)
             .service(routes::health)
-            .service(routes::job_start)
-            .service(routes::job_stop)
-            .service(routes::job_sleep)
-            .service(routes::job_debug)
     })
     .bind(&host)?
     .run()
@@ -53,15 +41,13 @@ pub async fn init_server() -> anyhow::Result<()> {
     kafka_aap_simulering_consumer.disable();
     kafka_aap_simulering_handle.await.unwrap();
 
-    job_handle.await.unwrap();
-
     Ok(())
 }
 
 pub fn env_or_default(key: &str, default: &str) -> String {
     match std::env::var(key) {
         Ok(val) => val,
-        Err(_) => default.to_string(),
+        Err(_) => default.to_owned(),
     }
 }
 

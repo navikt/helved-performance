@@ -1,20 +1,19 @@
 use std::{env, hash::Hasher, sync::{mpsc::{self, Receiver, Sender}, Arc, Mutex}, time::Duration};
 use actix_web::rt::{spawn, task::JoinHandle, time::sleep};
-use chrono::{DateTime, NaiveDate, Utc};
 use log::{error, info};
 use rdkafka::{consumer::{BaseConsumer, Consumer}, producer::{FutureProducer, FutureRecord}, ClientConfig, Message};
-use serde::{Deserialize, Serialize};
 use twox_hash::XxHash32;
 use uuid::Uuid;
+use crate::models::{dryrun, status, dp};
 
 const NUM_PARTITIONS: i32 = 3;
 
-pub async fn abetal(uid: Uuid, utbet: &Utbetaling)
+pub async fn abetal(uid: Uuid, utbet: &dp::Utbetaling)
 {
     let producer = producer("perf-abetal-aap");
     let key = uid.to_string();
     let value = serde_json::to_string(utbet).expect("failed to serialize");
-    let record = FutureRecord::to("helved.aap-utbetalinger.v1")
+    let record = FutureRecord::to("helved.utbetalinger-aap.v1")
         .key(&key)
         .payload(&value)
         .partition(partition(uid));
@@ -25,14 +24,14 @@ pub async fn abetal(uid: Uuid, utbet: &Utbetaling)
     };
 }
 
-pub fn init_status_consumer() -> (Arc<Channel<StatusReply>>, JoinHandle<()>)
+pub fn init_status_consumer() -> (Arc<Channel<status::Reply>>, JoinHandle<()>)
 {
     let channel = Arc::new(Channel::default());
     let handle = spawn(status_consumer(channel.clone()));
     (channel.clone(), handle)
 }
 
-async fn status_consumer(channel: Arc<Channel<StatusReply>>) {
+async fn status_consumer(channel: Arc<Channel<status::Reply>>) {
     let consumer = consumer("perf-abetal-status");
     consumer.subscribe(&["helved.status.v1"]).expect("subscribe to status-topic");
     let mut current_uid: Option<Uuid> = None;
@@ -55,14 +54,14 @@ async fn status_consumer(channel: Arc<Channel<StatusReply>>) {
                 let payload = record.payload().expect("payload");
                 let json = std::str::from_utf8(payload).unwrap();
                 info!("Record received: {}", json);
-                let state: StatusReply = serde_json::from_str(json).unwrap(); 
+                let state: status::Reply = serde_json::from_str(json).unwrap(); 
                 {
                     let tx = &channel.result.lock().unwrap().0;
                     tx.send(state.clone()).unwrap();
                 }
                 match state.status {
-                    Status::Ok => current_uid = None,
-                    Status::Feilet => current_uid = None,
+                    status::Status::Ok => current_uid = None,
+                    status::Status::Feilet => current_uid = None,
                     _ => {},
                 } 
             };
@@ -74,14 +73,14 @@ async fn status_consumer(channel: Arc<Channel<StatusReply>>) {
     consumer.unsubscribe();
 }
 
-pub fn init_aap_simulering_consumer() -> (Arc<Channel<Simulering>>, JoinHandle<()>)
+pub fn init_aap_simulering_consumer() -> (Arc<Channel<dryrun::Simulering>>, JoinHandle<()>)
 {
     let channel = Arc::new(Channel::default());
     let handle = spawn(aap_simulering_consumer(channel.clone()));
     (channel.clone(), handle)
 }
 
-async fn aap_simulering_consumer(channel: Arc<Channel<Simulering>>) {
+async fn aap_simulering_consumer(channel: Arc<Channel<dryrun::Simulering>>) {
     let consumer = consumer("perf-aap-simulering");
     consumer.subscribe(&["helved.aap-simulering.v1"]).expect("subscribe to aap-simulering-topic");
     let mut current_uid: Option<Uuid> = None;
@@ -104,7 +103,7 @@ async fn aap_simulering_consumer(channel: Arc<Channel<Simulering>>) {
                 let payload = record.payload().expect("payload");
                 let json = std::str::from_utf8(payload).unwrap();
                 info!("Record received: {}", json);
-                let simulering: Simulering = serde_json::from_str(json).unwrap(); 
+                let simulering: dryrun::Simulering = serde_json::from_str(json).unwrap(); 
                 let tx = &channel.result.lock().unwrap().0;
                 tx.send(simulering.clone()).unwrap();
                 current_uid = None
@@ -180,98 +179,6 @@ impl <T> Default for Channel<T> {
             uid: Mutex::new(mpsc::channel()),
         }
     }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct Utbetaling 
-{
-    pub simulate: bool,
-    action: Action,
-    sak_id: String,
-    behandling_id: String,
-    personident: String,
-    vedtakstidspunkt: DateTime<Utc>,
-    stønad: String,
-    beslutter_id: String,
-    saksbehandler_id: String,
-    periodetype: Periodetype,
-    perioder: Vec<Utbetalingsperiode>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct Utbetalingsperiode {
-    fom: NaiveDate,
-    tom: NaiveDate,
-    beløp: u32,
-    betalende_enhet: Option<String>,
-    fastsatt_dagsats: Option<u32>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "UPPERCASE")]
-pub enum Action {
-    Create,
-    Update,
-    Delete,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum Periodetype {
-    Dag,
-    Ukedag,
-    Mnd,
-    EnGang,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct StatusReply {
-    pub status: Status,
-    error: Option<ApiError>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct ApiError {
-    status_code: i32,
-    msg: String,
-    doc: String,
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum Status {
-    Ok,
-    Feilet,
-    Mottatt,
-    HosOppdrag,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct Simulering {
-    perioder: Vec<SimuleringPeriode>
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct SimuleringPeriode {
-    fom: NaiveDate,
-    tom: NaiveDate,
-    utbetalinger: Vec<SimuleringUtbetaling>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct SimuleringUtbetaling {
-    fagsystem: String,
-    sak_id: String,
-    utbetales_til: String,
-    stønadstype: String,
-    tidligere_utbetalt: i32,
-    nytt_beløp: i32,
 }
 
 #[cfg(test)]
