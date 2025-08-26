@@ -1,5 +1,4 @@
-use std::time::{Duration, Instant};
-use actix_web::rt::time::sleep;
+use std::{time::Duration, collections::HashMap, sync::{Arc, Mutex, mpsc}};
 use actix_web::web::{self, Data};
 use actix_web::{get, post, HttpResponse};
 use log::info;
@@ -8,69 +7,47 @@ use uuid::Uuid;
 use crate::kafka;
 use crate::models;
 
+pub type PendingMap<T> = Arc<Mutex<HashMap<Uuid, mpsc::Sender<T>>>>; 
+
 #[get("/health")]
 pub async fn health() -> HttpResponse {
     HttpResponse::Ok().finish()
 }
 
-#[post("/abetal")]
-pub async fn abetal(
-    status: Data<kafka::Channel<models::status::Reply>>,
-    simulering: Data<kafka::Channel<models::dryrun::Simulering>>,
+#[post("/abetal/dp")]
+pub async fn abetal_dp(
+    status_pending: Data<PendingMap<models::status::Reply>>,
+    sim_pending: Data<PendingMap<models::dryrun::Simulering>>,
     json: web::Json<models::dp::Utbetaling>,
 ) -> HttpResponse {
     let key = Uuid::new_v4();
     info!("abetal {}", &key);
 
-    {
-        let tx = &status.uid.lock().unwrap().0;
-        tx.send(key).unwrap();
-    }
+    let (status_tx, status_rx) = mpsc::channel();
+    status_pending.lock().unwrap().insert(key, status_tx);
 
-    if json.0.dryrun {
-        let tx = &simulering.uid.lock().unwrap().0;
-        tx.send(key).unwrap();
-    }
-
-    kafka::abetal(key, &json.0).await; 
-
-    let start = Instant::now();
-    let mut last_status: Option<models::status::Reply> = None;
-    let mut simulering_result: Option<models::dryrun::Simulering> = None;
-    loop {
-        if start.elapsed() >= Duration::from_secs(50) { // simulering kan være treg
-            break;
-        }
-        {
-            if json.0.dryrun {
-                let rx = &simulering.result.lock().unwrap().1;
-                if let Ok(rec) = rx.recv_timeout(Duration::from_millis(10)) {
-                    simulering_result = Some(rec.clone());
-                    break;
-                }
-            }
-
-            let rx = &status.result.lock().unwrap().1;
-            if let Ok(rec) = rx.recv_timeout(Duration::from_millis(10)) {
-                last_status = Some(rec.clone());
-                match rec.status {
-                    models::status::Status::Mottatt    => {},
-                    models::status::Status::HosOppdrag => {},
-                    models::status::Status::Feilet     => break,
-                    models::status::Status::Ok         => break,
-                }
-            }
-        }
-        sleep(Duration::from_millis(1)).await;
-    }
-
-    if let Some(sim) = simulering_result {
-        return HttpResponse::Ok().json(sim);
+    let sim_rx = if json.0.dryrun {
+        let (sim_tx, sim_rx) = mpsc::channel();
+        sim_pending.lock().unwrap().insert(key, sim_tx);
+        Some(sim_rx)
+    } else {
+        None
     };
 
-    match last_status {
-        Some(status) => HttpResponse::Ok().json(status),
-        None => HttpResponse::Accepted().finish(),
+    kafka::produce_dp_utbetaling(key, &json.0).await; 
+
+    if let Some(sim_rx) = sim_rx {
+        match sim_rx.recv_timeout(Duration::from_secs(30)) {
+            Ok(sim) => return HttpResponse::Ok().json(sim),
+            Err(mpsc::RecvTimeoutError::Timeout) => return HttpResponse::RequestTimeout().finish(),
+            Err(_) => return HttpResponse::InternalServerError().finish(),
+        }
+    }
+
+    match status_rx.recv_timeout(Duration::from_secs(30)) {
+        Ok(status) => HttpResponse::Ok().json(status),
+        Err(mpsc::RecvTimeoutError::Timeout) => HttpResponse::RequestTimeout().finish(),
+        Err(_) => HttpResponse::InternalServerError().finish(),
     }
 }
 

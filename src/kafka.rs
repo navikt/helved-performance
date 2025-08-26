@@ -1,19 +1,19 @@
-use std::{env, hash::Hasher, sync::{mpsc::{self, Receiver, Sender}, Arc, Mutex}, time::Duration};
-use actix_web::rt::{spawn, task::JoinHandle, time::sleep};
+use std::{env, hash::Hasher, time::Duration};
+use actix_web::rt::time::sleep;
 use log::{error, info};
 use rdkafka::{consumer::{BaseConsumer, Consumer}, producer::{FutureProducer, FutureRecord}, ClientConfig, Message};
 use twox_hash::XxHash32;
 use uuid::Uuid;
-use crate::models::{dryrun, status, dp};
+use crate::{models::{self, dp, status}, routes::PendingMap};
 
 const NUM_PARTITIONS: i32 = 3;
 
-pub async fn abetal(uid: Uuid, utbet: &dp::Utbetaling)
+pub async fn produce_dp_utbetaling(uid: Uuid, utbet: &dp::Utbetaling)
 {
-    let producer = producer("perf-abetal-aap");
+    let producer = producer("produce-dp-utbetaling");
     let key = uid.to_string();
     let value = serde_json::to_string(utbet).expect("failed to serialize");
-    let record = FutureRecord::to("helved.utbetalinger-aap.v1")
+    let record = FutureRecord::to("helved.utbetalinger-dp.v1")
         .key(&key)
         .payload(&value)
         .partition(partition(uid));
@@ -24,96 +24,96 @@ pub async fn abetal(uid: Uuid, utbet: &dp::Utbetaling)
     };
 }
 
-pub fn init_status_consumer() -> (Arc<Channel<status::Reply>>, JoinHandle<()>)
-{
-    let channel = Arc::new(Channel::default());
-    let handle = spawn(status_consumer(channel.clone()));
-    (channel.clone(), handle)
-}
-
-async fn status_consumer(channel: Arc<Channel<status::Reply>>) {
-    let consumer = consumer("perf-abetal-status");
+pub async fn status_consumer(status_pending: PendingMap<status::Reply>) {
+    let consumer = consumer("consume_status");
     consumer.subscribe(&["helved.status.v1"]).expect("subscribe to status-topic");
-    let mut current_uid: Option<Uuid> = None;
+
     loop {
-        if !*channel.active.lock().unwrap() {
-            break;
-        }
-        {
-            let rx = &channel.uid.lock().unwrap().1;
-            if let Ok(uid) = rx.recv_timeout(Duration::from_millis(10)) {
-                current_uid = Some(uid);
-            }
-        }
-        if let Some(uid) = current_uid {
-            if let Some(result) = consumer.poll(Duration::from_millis(10)) {
-                let record = result.expect("kafka message");
-                if uid.to_string() != std::str::from_utf8(record.key().expect("key")).expect("str") { 
-                    continue 
-                };
-                let payload = record.payload().expect("payload");
-                let json = std::str::from_utf8(payload).unwrap();
-                info!("Record received: {}", json);
-                let state: status::Reply = serde_json::from_str(json).unwrap(); 
-                {
-                    let tx = &channel.result.lock().unwrap().0;
-                    tx.send(state.clone()).unwrap();
+        if let Some(result) = consumer.poll(Duration::from_millis(50)) {
+            let record = match result {
+                Ok(record) => record,
+                Err(e) => {
+                    error!("failed to read record on helved.status.v1 {:?}", e);
+                    continue
                 }
-                match state.status {
-                    status::Status::Ok => current_uid = None,
-                    status::Status::Feilet => current_uid = None,
-                    _ => {},
-                } 
             };
-        };
 
-        sleep(Duration::from_millis(1)).await;
-    }
+            let uid = match record.key()
+                .and_then(|it| std::str::from_utf8(it).ok())
+                .and_then(|it| Uuid::parse_str(it).ok())
+            {
+                Some(uid) => uid,
+                None => continue,
+            };
 
-    consumer.unsubscribe();
-}
+            let payload = match record.payload().and_then(|it| std::str::from_utf8(it).ok()) {
+                Some(payload) => payload,
+                None => continue,
+            };
 
-pub fn init_aap_simulering_consumer() -> (Arc<Channel<dryrun::Simulering>>, JoinHandle<()>)
-{
-    let channel = Arc::new(Channel::default());
-    let handle = spawn(aap_simulering_consumer(channel.clone()));
-    (channel.clone(), handle)
-}
+            let reply: status::Reply = match serde_json::from_str(payload) {
+                Ok(reply) => reply,
+                Err(e) => {
+                    error!("failed to deserialize status::Reply {:?}", e);
+                    continue;
+                }
+            };
 
-async fn aap_simulering_consumer(channel: Arc<Channel<dryrun::Simulering>>) {
-    let consumer = consumer("perf-aap-simulering");
-    consumer.subscribe(&["helved.aap-simulering.v1"]).expect("subscribe to aap-simulering-topic");
-    let mut current_uid: Option<Uuid> = None;
-    loop {
-        if !*channel.active.lock().unwrap() {
-            break;
-        }
-        {
-            let rx = &channel.uid.lock().unwrap().1;
-            if let Ok(uid) = rx.recv_timeout(Duration::from_millis(10)) {
-                current_uid = Some(uid);
+            if let Some(status_tx) = status_pending.lock().unwrap().remove(&uid) {
+                let _ = status_tx.send(reply);
             }
         }
-        if let Some(uid) = current_uid {
-            if let Some(result) = consumer.poll(Duration::from_millis(10)) {
-                let record = result.expect("kafka message");
-                if uid.to_string() != std::str::from_utf8(record.key().expect("key")).expect("str") { 
-                    continue 
-                };
-                let payload = record.payload().expect("payload");
-                let json = std::str::from_utf8(payload).unwrap();
-                info!("Record received: {}", json);
-                let simulering: dryrun::Simulering = serde_json::from_str(json).unwrap(); 
-                let tx = &channel.result.lock().unwrap().0;
-                tx.send(simulering.clone()).unwrap();
-                current_uid = None
-            };
-        };
 
         sleep(Duration::from_millis(1)).await;
     }
 
-    consumer.unsubscribe();
+    // consumer.unsubscribe();
+}
+
+pub async fn dryrun_consumer(simulering_pending: PendingMap<models::dryrun::Simulering>) {
+    let consumer = consumer("consume-dryruns");
+    consumer.subscribe(&["helved.dryrun-aap.v1", "helved.dryrun-dp.v1"]).expect("subscribe to topic dryrun-aap or dryrun-dp");
+
+    loop {
+        if let Some(result) = consumer.poll(Duration::from_millis(50)) {
+            let record = match result {
+                Ok(record) => record,
+                Err(e) => {
+                    error!("failed to read record on helved.dryrun-aap.v1 or helved.dryrun-dp.v1 {:?}", e);
+                    continue
+                }
+            };
+
+            let uid = match record.key()
+                .and_then(|it| std::str::from_utf8(it).ok())
+                .and_then(|it| Uuid::parse_str(it).ok())
+            {
+                Some(uid) => uid,
+                None => continue,
+            };
+
+            let payload = match record.payload().and_then(|it| std::str::from_utf8(it).ok()) {
+                Some(payload) => payload,
+                None => continue,
+            };
+
+            let simulering: models::dryrun::Simulering = match serde_json::from_str(payload) {
+                Ok(simulering) => simulering,
+                Err(e) => {
+                    error!("failed to deserialize models::dryrun::Simulering {:?}", e);
+                    continue;
+                }
+            };
+
+            if let Some(simulering_tx) = simulering_pending.lock().unwrap().remove(&uid) {
+                let _ = simulering_tx.send(simulering);
+            }
+        }
+
+        sleep(Duration::from_millis(1)).await;
+    }
+
+    // consumer.unsubscribe();
 }
 
 fn producer(client_id: &str) -> FutureProducer
@@ -157,28 +157,6 @@ fn partition(key: Uuid) -> i32
     hasher.write(key.to_string().as_bytes());
     let hash = hasher.finish() as i32;
     (hash & 0x7fffffff) % NUM_PARTITIONS // ensure positive result
-}
-
-pub struct Channel<T> {
-    active: Mutex<bool>,
-    pub result: Mutex<(Sender<T>, Receiver<T>)>,
-    pub uid: Mutex<(Sender<Uuid>, Receiver<Uuid>)>,
-}
-
-impl <T> Channel<T> {
-    pub fn disable(&self) {
-        *self.active.lock().unwrap() = false
-    }
-}
-
-impl <T> Default for Channel<T> {
-    fn default() -> Self {
-        Channel {
-            active: Mutex::new(true),
-            result: Mutex::new(mpsc::channel()),
-            uid: Mutex::new(mpsc::channel()),
-        }
-    }
 }
 
 #[cfg(test)]

@@ -1,9 +1,15 @@
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
 use actix_web::web::Data;
 use actix_web::{App, HttpServer};
 use log4rs::append::console::ConsoleAppender;
 use log4rs::config::*;
 use log4rs::encode::json::JsonEncoder;
 use log4rs::init_config;
+
+use crate::models::status;
+use crate::routes::PendingMap;
 
 mod models;
 mod kafka;
@@ -18,28 +24,28 @@ async fn main() -> anyhow::Result<()> {
 pub async fn init_server() -> anyhow::Result<()> {
     let host = env_or_default("BIND_ADDRESS", "127.0.0.1:8080");
 
-    let (kafka_status_consumer, kafka_status_handle) = kafka::init_status_consumer();
-    let status_channel = kafka_status_consumer.clone();
+    let status_pending: PendingMap<status::Reply> = Arc::new(Mutex::new(HashMap::new()));
+    actix_web::rt::spawn(kafka::status_consumer(status_pending.clone()));
 
-    let (kafka_aap_simulering_consumer, kafka_aap_simulering_handle) = kafka::init_aap_simulering_consumer();
-    let aap_simulering_channel = kafka_aap_simulering_consumer.clone();
+    let simulering_pending: PendingMap<models::dryrun::Simulering> = Arc::new(Mutex::new(HashMap::new()));
+    actix_web::rt::spawn(kafka::dryrun_consumer(simulering_pending.clone()));
 
     let _ = HttpServer::new(move || {
         App::new()
-            .app_data(Data::from(status_channel.clone()))
-            .app_data(Data::from(aap_simulering_channel.clone()))
-            .service(routes::abetal)
+            .app_data(Data::from(status_pending.clone()))
+            .app_data(Data::from(simulering_pending.clone()))
+            .service(routes::abetal_dp)
             .service(routes::health)
     })
     .bind(&host)?
     .run()
     .await;
 
-    kafka_status_consumer.disable();
-    kafka_status_handle.await.unwrap();
-
-    kafka_aap_simulering_consumer.disable();
-    kafka_aap_simulering_handle.await.unwrap();
+    // todo: how to close consumer and unsubscribe topic
+    // kafka_status_consumer.disable();
+    // kafka_status_handle.await.unwrap();
+    // kafka_aap_simulering_consumer.disable();
+    // kafka_aap_simulering_handle.await.unwrap();
 
     Ok(())
 }
