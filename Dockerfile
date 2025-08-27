@@ -7,7 +7,7 @@ RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS builder
 COPY --from=planner /app/recipe.json recipe.json
-RUN apt-get update && apt-get install -y --no-install-recommends pkg-config libssl-dev g++
+RUN apt-get update && apt-get install -y --no-install-recommends pkg-config libssl-dev g++ make
 RUN cargo chef cook --release --recipe-path recipe.json
 COPY . .
 RUN cargo build --release --bin helved-performance
