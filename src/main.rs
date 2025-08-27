@@ -32,20 +32,14 @@ pub async fn init_server() -> anyhow::Result<()> {
 
     let _ = HttpServer::new(move || {
         App::new()
-            .app_data(Data::from(status_pending.clone()))
-            .app_data(Data::from(simulering_pending.clone()))
+            .app_data(Data::new(status_pending.clone()))
+            .app_data(Data::new(simulering_pending.clone()))
             .service(routes::abetal_dp)
             .service(routes::health)
     })
     .bind(&host)?
     .run()
     .await;
-
-    // todo: how to close consumer and unsubscribe topic
-    // kafka_status_consumer.disable();
-    // kafka_status_handle.await.unwrap();
-    // kafka_aap_simulering_consumer.disable();
-    // kafka_aap_simulering_handle.await.unwrap();
 
     Ok(())
 }
