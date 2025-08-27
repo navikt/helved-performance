@@ -29,3 +29,8 @@ spec:
     outbound:
       rules:
         - application: utsjekk
+  observability:
+    logging:
+      destinations:
+        - id: loki
+        - id: elastic
