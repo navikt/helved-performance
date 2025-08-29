@@ -13,6 +13,8 @@ pub mod dp
         ident: String,
         utbetalinger: Vec<Utbetalingsdag>,
         vedtakstidspunktet: DateTime<Utc>,
+        saksbehandler: Option<String>,
+        beslutter: Option<String>,
     }
 
     #[derive(Serialize, Deserialize, Debug)]
