@@ -11,7 +11,9 @@ pub mod aap {
         behandling_id: String,
         ident: String,
         utbetalinger: Vec<Utbetalingsdag>,
-        vedtakstidspunktet: DateTime<Utc>
+        vedtakstidspunktet: DateTime<Utc>,
+        saksbehandler: Option<String>,
+        beslutter: Option<String>,
     }
 
     #[derive(Serialize, Deserialize, Debug)]
