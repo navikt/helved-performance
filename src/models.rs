@@ -1,3 +1,34 @@
+pub mod aap {
+    use chrono::{DateTime, NaiveDate, Utc};
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Serialize, Deserialize, Debug)]
+    #[serde(rename_all = "camelCase")]
+    pub struct Utbetaling
+    {
+        pub dryrun: bool,
+        sak_id: String,
+        behandling_id: String,
+        ident: String,
+        utbetalinger: Vec<Utbetalingsdag>,
+        vedtakstidspunktet: DateTime<Utc>
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    #[serde(rename_all = "camelCase")]
+    pub struct Utbetalingsdag {
+        meldeperiode: String,
+        dato: NaiveDate,
+        sats: u32,
+        utbetalt_beløp: u32
+    }
+}
+
+pub enum Utbetaling<'a> {
+    Aap(&'a aap::Utbetaling),
+    Dp(&'a dp::Utbetaling)
+}
+
 pub mod dp
 {
     use chrono::{DateTime, NaiveDate, Utc};

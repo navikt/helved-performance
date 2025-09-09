@@ -1,32 +1,56 @@
-use std::{env, hash::Hasher, time::Duration};
+use crate::models::Utbetaling;
+use crate::{
+    models::{self, status},
+    routes::PendingMap,
+};
 use actix_web::rt::time::sleep;
 use log::{error, info};
-use rdkafka::{consumer::{BaseConsumer, Consumer}, producer::{FutureProducer, FutureRecord}, ClientConfig, Message};
+use rdkafka::{
+    ClientConfig, Message,
+    consumer::{BaseConsumer, Consumer},
+    producer::{FutureProducer, FutureRecord},
+};
+use std::{env, hash::Hasher, time::Duration};
 use twox_hash::XxHash32;
 use uuid::Uuid;
-use crate::{models::{self, dp, status}, routes::PendingMap};
 
 const NUM_PARTITIONS: i32 = 3;
 
-pub async fn produce_dp_utbetaling(uid: Uuid, utbet: &dp::Utbetaling)
-{
-    let producer = producer("produce-dp-utbetaling");
-    let key = uid.to_string();
-    let value = serde_json::to_string(utbet).expect("failed to serialize");
-    let record = FutureRecord::to("helved.utbetalinger-dp.v1")
-        .key(&key)
-        .payload(&value)
-        .partition(partition(uid));
+pub async fn produce_utbetaling(uid: Uuid, utbet: Utbetaling<'_>) {
+    {
+        let (topic, producer, value) = match utbet {
+            Utbetaling::Aap(aap) => {
+                let topic = "helved.utbetalinger-aap.v1";
+                let producer = producer("produce-aap-utbetaling");
+                let value = serde_json::to_string(&aap).expect("failed to serialize");
+                (topic, producer, value)
+            }
+            Utbetaling::Dp(dp) => {
+                let topic = "helved.utbetalinger-dp.v1";
+                let producer = producer("produce-dp-utbetaling");
+                let value = serde_json::to_string(&dp).expect("failed to serialize");
+                (topic, producer, value)
+            }
+        };
 
-    match producer.send(record, Duration::from_secs(5)).await {
-        Ok(delivery) => info!("Record sent: {:?}", delivery),
-        Err((err, msg)) => error!("Failed to send record: {:?} msg: {:?}", err, msg),
-    };
+        let key = uid.to_string();
+        let record = FutureRecord::to(topic)
+            .key(&key)
+            .payload(&value)
+            .partition(partition(uid));
+
+        match producer.send(record, Duration::from_secs(5)).await {
+            Ok(delivery) => info!("Record sent: {:?}", delivery),
+            Err((err, msg)) => error!("Failed to send record: {:?} msg: {:?}", err, msg),
+        };
+    }
 }
 
 pub async fn status_consumer(status_pending: PendingMap<status::Reply>) {
     let consumer = consumer("consume_status");
-    consumer.subscribe(&["helved.status.v1"]).expect("subscribe to status-topic");
+    consumer
+        .subscribe(&["helved.status.v1"])
+        .expect("subscribe to status-topic");
 
     loop {
         if let Some(result) = consumer.poll(Duration::from_millis(50)) {
@@ -34,11 +58,12 @@ pub async fn status_consumer(status_pending: PendingMap<status::Reply>) {
                 Ok(record) => record,
                 Err(e) => {
                     error!("failed to read record on helved.status.v1 {:?}", e);
-                    continue
+                    continue;
                 }
             };
 
-            let uid = match record.key()
+            let uid = match record
+                .key()
                 .and_then(|it| std::str::from_utf8(it).ok())
                 .and_then(|it| Uuid::parse_str(it).ok())
             {
@@ -72,19 +97,25 @@ pub async fn status_consumer(status_pending: PendingMap<status::Reply>) {
 
 pub async fn dryrun_consumer(simulering_pending: PendingMap<models::dryrun::Simulering>) {
     let consumer = consumer("consume-dryruns");
-    consumer.subscribe(&["helved.dryrun-aap.v1", "helved.dryrun-dp.v1"]).expect("subscribe to topic dryrun-aap or dryrun-dp");
+    consumer
+        .subscribe(&["helved.dryrun-aap.v1", "helved.dryrun-dp.v1"])
+        .expect("subscribe to topic dryrun-aap or dryrun-dp");
 
     loop {
         if let Some(result) = consumer.poll(Duration::from_millis(50)) {
             let record = match result {
                 Ok(record) => record,
                 Err(e) => {
-                    error!("failed to read record on helved.dryrun-aap.v1 or helved.dryrun-dp.v1 {:?}", e);
-                    continue
+                    error!(
+                        "failed to read record on helved.dryrun-aap.v1 or helved.dryrun-dp.v1 {:?}",
+                        e
+                    );
+                    continue;
                 }
             };
 
-            let uid = match record.key()
+            let uid = match record
+                .key()
                 .and_then(|it| std::str::from_utf8(it).ok())
                 .and_then(|it| Uuid::parse_str(it).ok())
             {
@@ -116,43 +147,63 @@ pub async fn dryrun_consumer(simulering_pending: PendingMap<models::dryrun::Simu
     // consumer.unsubscribe();
 }
 
-fn producer(client_id: &str) -> FutureProducer
-{
+fn producer(client_id: &str) -> FutureProducer {
     ClientConfig::new()
-        .set("bootstrap.servers", env::var("KAFKA_BROKERS").expect("KAFKA_BROKERS"))
+        .set(
+            "bootstrap.servers",
+            env::var("KAFKA_BROKERS").expect("KAFKA_BROKERS"),
+        )
         .set("client.id", client_id.to_owned())
         .set("security.protocol", "ssl")
         .set("compression.codec", "snappy")
-        .set("ssl.key.location", env::var("KAFKA_PRIVATE_KEY_PATH").expect("KAFKA_PRIVATE_KEY_PATH"))
-        .set("ssl.certificate.location", env::var("KAFKA_CERTIFICATE_PATH").expect("KAFKA_CERTIFICATE_PATH"))
-        .set("ssl.ca.location", env::var("KAFKA_CA_PATH").expect("KAFKA_CA_PATH"))
-        .create()
-        .unwrap_or_else(|_| { 
-                error!("Failed to create kafka producer {client_id}");
-                panic!("Failed to create kafka producer {client_id}")
-            }
+        .set(
+            "ssl.key.location",
+            env::var("KAFKA_PRIVATE_KEY_PATH").expect("KAFKA_PRIVATE_KEY_PATH"),
         )
+        .set(
+            "ssl.certificate.location",
+            env::var("KAFKA_CERTIFICATE_PATH").expect("KAFKA_CERTIFICATE_PATH"),
+        )
+        .set(
+            "ssl.ca.location",
+            env::var("KAFKA_CA_PATH").expect("KAFKA_CA_PATH"),
+        )
+        .create()
+        .unwrap_or_else(|_| {
+            error!("Failed to create kafka producer {client_id}");
+            panic!("Failed to create kafka producer {client_id}")
+        })
 }
 
-fn consumer(client_id: &str) -> BaseConsumer  
-{
+fn consumer(client_id: &str) -> BaseConsumer {
     ClientConfig::new()
-        .set("bootstrap.servers", env::var("KAFKA_BROKERS").expect("KAFKA_BROKERS"))
+        .set(
+            "bootstrap.servers",
+            env::var("KAFKA_BROKERS").expect("KAFKA_BROKERS"),
+        )
         .set("client.id", client_id.to_owned())
         .set("group.id", format!("{}-consumer", &client_id))
         .set("auto.offset.reset", "latest")
         .set("enable.auto.commit", "false")
         .set("session.timeout.ms", "6000")
         .set("security.protocol", "ssl")
-        .set("ssl.key.location", env::var("KAFKA_PRIVATE_KEY_PATH").expect("KAFKA_PRIVATE_KEY_PATH"))
-        .set("ssl.certificate.location", env::var("KAFKA_CERTIFICATE_PATH").expect("KAFKA_CERTIFICATE_PATH"))
-        .set("ssl.ca.location", env::var("KAFKA_CA_PATH").expect("KAFKA_CA_PATH"))
+        .set(
+            "ssl.key.location",
+            env::var("KAFKA_PRIVATE_KEY_PATH").expect("KAFKA_PRIVATE_KEY_PATH"),
+        )
+        .set(
+            "ssl.certificate.location",
+            env::var("KAFKA_CERTIFICATE_PATH").expect("KAFKA_CERTIFICATE_PATH"),
+        )
+        .set(
+            "ssl.ca.location",
+            env::var("KAFKA_CA_PATH").expect("KAFKA_CA_PATH"),
+        )
         .create()
         .unwrap_or_else(|_| panic!("Failed to create kafka consumer {client_id}"))
 }
 
-fn partition(key: Uuid) -> i32
-{
+fn partition(key: Uuid) -> i32 {
     let mut hasher = XxHash32::with_seed(0); // seed 0 like kakfa's murmur2
     hasher.write(key.to_string().as_bytes());
     let hash = hasher.finish() as i32;
