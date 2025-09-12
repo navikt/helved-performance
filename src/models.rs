@@ -83,14 +83,14 @@ pub mod status
     #[derive(Serialize, Deserialize, Debug, Clone)]
     pub struct Reply {
         pub status: Status,
-        error: Option<Error>,
+        pub error: Option<Error>,
     }
 
     #[derive(Serialize, Deserialize, Debug, Clone)]
     #[serde(rename_all = "camelCase")]
     pub struct Error {
-        status_code: i32,
-        msg: String,
+        pub status_code: u16,
+        pub msg: String,
         doc: String,
     }
 

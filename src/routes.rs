@@ -1,11 +1,13 @@
 use std::{time::Duration, collections::HashMap, sync::{Arc, Mutex, mpsc}};
 use actix_web::web::{self, Data};
-use actix_web::{get, post, HttpResponse};
-use log::info;
+use actix_web::{get, post, HttpResponse, HttpResponseBuilder};
+use actix_web::http::StatusCode;
+use log::{info};
 use uuid::Uuid;
 
 use crate::kafka;
 use crate::models;
+use crate::models::status::{Status};
 
 pub type PendingMap<T> = Arc<Mutex<HashMap<Uuid, mpsc::Sender<T>>>>;
 
@@ -45,7 +47,15 @@ pub async fn abetal_aap(
     }
 
     match status_rx.recv_timeout(Duration::from_secs(30)) {
-        Ok(status) => HttpResponse::Ok().json(status),
+        Ok(reply) => match reply.status {
+            Status::Ok => HttpResponse::Ok().json(reply.status),
+            Status::Mottatt => HttpResponse::Accepted().json(reply.status),
+            Status::HosOppdrag => HttpResponse::Accepted().json(reply.status),
+            Status::Feilet => match reply.error {
+                None => HttpResponse::InternalServerError().finish(),
+                Some(error) => HttpResponseBuilder::new(StatusCode::from_u16(error.status_code).expect("Valid status code")).json(error.msg)
+            }
+        },
         Err(mpsc::RecvTimeoutError::Timeout) => HttpResponse::RequestTimeout().finish(),
         Err(_) => HttpResponse::InternalServerError().finish(),
     }
@@ -82,7 +92,15 @@ pub async fn abetal_dp(
     }
 
     match status_rx.recv_timeout(Duration::from_secs(30)) {
-        Ok(status) => HttpResponse::Ok().json(status),
+        Ok(reply) => match reply.status {
+            Status::Ok => HttpResponse::Ok().json(reply.status),
+            Status::Mottatt => HttpResponse::Accepted().json(reply.status),
+            Status::HosOppdrag => HttpResponse::Accepted().json(reply.status),
+            Status::Feilet => match reply.error {
+                None => HttpResponse::InternalServerError().finish(),
+                Some(error) => HttpResponseBuilder::new(StatusCode::from_u16(error.status_code).expect("Valid status code")).json(error.msg)
+            }
+        },
         Err(mpsc::RecvTimeoutError::Timeout) => HttpResponse::RequestTimeout().finish(),
         Err(_) => HttpResponse::InternalServerError().finish(),
     }
