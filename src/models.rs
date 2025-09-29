@@ -28,7 +28,8 @@ pub mod aap {
 
 pub enum Utbetaling<'a> {
     Aap(&'a aap::Utbetaling),
-    Dp(&'a dp::Utbetaling)
+    Dp(&'a dp::Utbetaling),
+    Ts(&'a ts::Utbetaling),
 }
 
 pub mod dp
@@ -73,6 +74,67 @@ pub mod dp
         Permittering,
         PermitteringFiskeindustrien,
         EØS,
+    }
+}
+
+pub mod ts
+{
+    use chrono::{DateTime, NaiveDate, Utc};
+    use serde::{Deserialize, Serialize};
+    use uuid::Uuid;
+
+    #[derive(Serialize, Deserialize, Debug)]
+    #[serde(rename_all = "camelCase")]
+    pub struct Utbetaling 
+    {
+        pub dryrun: bool,
+        id: Uuid,
+        sak_id: String,
+        behandling_id: String,
+        personident: String,
+        stønad: Stønadtype,
+        vedtakstidspunkt: DateTime<Utc>,
+        perioder: Vec<Periode>,
+        bruk_faområde_tillst: bool,
+        saksbehandler: Option<String>,
+        beslutter: Option<String>,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    #[serde(rename_all = "camelCase")]
+    pub struct Periode {
+        fom: NaiveDate,
+        tom: NaiveDate,
+        beløp: u32,
+    }
+
+    #[allow(non_camel_case_types)]
+    #[derive(Serialize, Deserialize, Debug)]
+    pub enum Stønadtype {
+        TILSYN_BARN_ENSLIG_FORSØRGER,
+        TILSYN_BARN_AAP,
+        TILSYN_BARN_ETTERLATTE,
+        LÆREMIDLER_ENSLIG_FORSØRGER,
+        LÆREMIDLER_AAP,
+        LÆREMIDLER_ETTERLATTE,
+        BOUTGIFTER_AAP,
+        BOUTGIFTER_ENSLIG_FORSØRGER,
+        BOUTGIFTER_ETTERLATTE,
+        DAGLIG_REISE_ENSLIG_FORSØRGET,
+        DAGLIG_REISE_AAP,
+        DAGLIG_REISE_ETTERLATTE,
+        REISE_TIL_SAMLING_ENSLIG_FORSØRGER,
+        REISE_TIL_SAMLING_AAP,
+        REISE_TIL_SAMLING_ETTERLATTE,
+        REISE_OPPSTART_ENSLIG_FORSØRGET,
+        REISE_OPPSTART_AAP,
+        REISE_OPPSTART_ETTERLATTE,
+        REIS_ARBEID_ENSLIG_FORSØRGER,
+        REIS_ARBEID_AAP,
+        REIS_ARBEID_ETTERLATTE,
+        FLYTTING_ENSLIG_FORSØRGER,
+        FLYTTING_AAP,
+        FLYTTING_ETTERLATTE,
     }
 }
 
