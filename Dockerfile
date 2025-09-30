@@ -10,7 +10,7 @@ ENV RUSTC_WRAPPER=sccache
 
 COPY sccache /sccache
 
-COPY ./Cargo.toml ./Cargo.lock ./
+COPY Cargo.toml Cargo.lock ./
 RUN mkdir src && echo "fn main(){}" > src/main.rs \
     && cargo build --release \
     && rm -rf src
