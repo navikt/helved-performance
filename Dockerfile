@@ -4,7 +4,9 @@ RUN apk add --no-cache \
     musl-dev \
     gcc \
     openssl-dev \
-    pkgconfig
+    pkgconfig \
+    bash
+
 ENV RUSTFLAGS="-C target-feature=+crt-static"
 COPY Cargo.toml Cargo.lock ./
 RUN mkdir src \
