@@ -3,6 +3,7 @@ WORKDIR /app
 RUN apk add --no-cache \
     musl-dev \
     gcc \
+    g++ \
     openssl-dev \
     pkgconfig \
     bash
