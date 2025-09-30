@@ -96,7 +96,7 @@ pub mod ts
         stønad: Stønadtype,
         vedtakstidspunkt: DateTime<Utc>,
         perioder: Vec<Periode>,
-        bruk_faområde_tillst: bool,
+        bruk_fagområde_tillst: bool,
         saksbehandler: Option<String>,
         beslutter: Option<String>,
     }
