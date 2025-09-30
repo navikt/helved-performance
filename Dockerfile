@@ -6,7 +6,8 @@ RUN apk add --no-cache \
     g++ \
     openssl-dev \
     pkgconfig \
-    bash
+    bash \
+    make
 
 ENV RUSTFLAGS="-C target-feature=+crt-static"
 COPY Cargo.toml Cargo.lock ./
