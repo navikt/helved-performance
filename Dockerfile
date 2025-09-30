@@ -1,24 +1,21 @@
-FROM rust:1.90-alpine3.22 AS builder
+FROM lukemathwalker/cargo-chef:latest-rust-1.90.0-slim AS chef
 WORKDIR /app
-RUN apk add --no-cache \
-    musl-dev \
-    gcc \
-    g++ \
-    openssl-dev \
-    pkgconfig \
-    bash \
-    make
 
-ENV RUSTFLAGS="-C target-feature=+crt-static"
-COPY Cargo.toml Cargo.lock ./
-RUN mkdir src \
-    && echo "fn main(){}" > src/main.rs \
-    && cargo build --release --target x86_64-unknown-linux-musl \
-    && rm -rf src
+FROM chef AS planner
 COPY . .
-RUN cargo build --release --target x86_64-unknown-linux-musl
+RUN cargo chef prepare --recipe-path recipe.json
 
-FROM alpine:3.19 AS final
+FROM chef AS builder
+COPY --from=planner /app/recipe.json recipe.json
+RUN apt-get update && apt-get install -y --no-install-recommends pkg-config libssl-dev g++ make
+RUN cargo chef cook --release --recipe-path recipe.json
+COPY . .
+RUN cargo build --release --bin helved-performance
+
+FROM debian:bookworm-slim AS runtime
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssl \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/helved-performance /usr/local/bin/helved-performance
-CMD ["/usr/local/bin/helved-performance"]
+COPY --from=builder /app/target/release/helved-performance /usr/local/bin
+ENTRYPOINT ["/usr/local/bin/helved-performance"]
