@@ -11,12 +11,24 @@ jobs:
       id-token: "write"
     steps:
       - uses: actions/checkout@v4
+      - name: Cache sccache directory
+        uses: actions/cache@v4
+        with: 
+          path: .sccache
+          key: ${{ runner.os }}-sccache-${{ hashFiles('**/Cargo.lock') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-sccache-${{ hashFiles('**/Cargo.lock') }}-
+            ${{ runner.os }}-sccache-
+      - name: Prepare sccache for Docker build
+        run: mkdir -p sccache && cp -r .sccache/* sccache/ || true
       - uses: nais/docker-build-push@v0
         id: docker-build-push
         with:
           team: helved
           identity_provider: ${{ secrets.NAIS_WORKLOAD_IDENTITY_PROVIDER }}
           project_id: ${{ vars.NAIS_MANAGEMENT_PROJECT_ID }}
+      - name: Sync new sccache contents back to hidden folder
+        run: cp -r sccache/* .sccache/ || true
     outputs:
       image: ${{ steps.docker-build-push.outputs.image }}
   deploy-dev:
