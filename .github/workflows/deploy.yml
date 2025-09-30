@@ -15,9 +15,9 @@ jobs:
         uses: actions/cache@v4
         with: 
           path: .sccache
-          key: ${{ runner.os }}-sccache-${{ hashFiles('**/Cargo.lock') }}-${{ github.sha }}
+          key: ${{ runner.os }}-sccache-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-sccache-${{ hashFiles('**/Cargo.lock') }}-
+            ${{ runner.os }}-sccache-${{ hashFiles('Cargo.lock') }}-
             ${{ runner.os }}-sccache-
       - name: Prepare sccache for Docker build
         run: mkdir -p sccache && cp -r .sccache/* sccache/ || true
