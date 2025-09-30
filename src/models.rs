@@ -30,6 +30,7 @@ pub enum Utbetaling<'a> {
     Aap(&'a aap::Utbetaling),
     Dp(&'a dp::Utbetaling),
     Ts(&'a ts::Utbetaling),
+    Tp(&'a tp::Utbetaling),
 }
 
 pub mod dp
@@ -135,6 +136,76 @@ pub mod ts
         FLYTTING_ENSLIG_FORSØRGER,
         FLYTTING_AAP,
         FLYTTING_ETTERLATTE,
+    }
+}
+
+pub mod tp
+{
+    use chrono::{DateTime, NaiveDate, Utc};
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Serialize, Deserialize, Debug)]
+    #[serde(rename_all = "camelCase")]
+    pub struct Utbetaling 
+    {
+        pub dryrun: bool,
+        sak_id: String,
+        behandling_id: String,
+        personident: String,
+        stønad: Stønadtype,
+        vedtakstidspunkt: DateTime<Utc>,
+        perioder: Vec<Periode>,
+        saksbehandler: Option<String>,
+        beslutter: Option<String>,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    #[serde(rename_all = "camelCase")]
+    pub struct Periode {
+        meldeperiode: String,
+        fom: NaiveDate,
+        tom: NaiveDate,
+        beløp: u32,
+    }
+
+    #[allow(non_camel_case_types)]
+    #[allow(clippy::upper_case_acronyms)]
+    #[derive(Serialize, Deserialize, Debug)]
+    pub enum Stønadtype {
+        ARBEIDSFORBEREDENDE_TRENING,
+        ARBEIDSRETTET_REHABILITERING,
+        ARBEIDSTRENING,
+        AVKLARING,
+        DIGITAL_JOBBKLUBB,
+        ENKELTPLASS_AMO,
+        ENKELTPLASS_VGS_OG_HØYERE_YRKESFAG,
+        FORSØK_OPPLÆRING_LENGRE_VARIGHET,
+        GRUPPE_AMO,
+        GRUPPE_VGS_OG_HØYERE_YRKESFAG,
+        HØYERE_UTDANNING,
+        INDIVIDUELL_JOBBSTØTTE,
+        INDIVIDUELL_KARRIERESTØTTE_UNG,
+        JOBBKLUBB,
+        OPPFØLGING,
+        UTVIDET_OPPFØLGING_I_NAV,
+        UTVIDET_OPPFØLGING_I_OPPLÆRING,
+        ARBEIDSFORBEREDENDE_TRENING_BARN,
+        ARBEIDSRETTET_REHABILITERING_BARN,
+        ARBEIDSTRENING_BARN,
+        AVKLARING_BARN,
+        DIGITAL_JOBBKLUBB_BARN,
+        ENKELTPLASS_AMO_BARN,
+        ENKELTPLASS_VGS_OG_HØYERE_YRKESFAG_BARN,
+        FORSØK_OPPLÆRING_LENGRE_VARIGHET_BARN,
+        GRUPPE_AMO_BARN,
+        GRUPPE_VGS_OG_HØYERE_YRKESFAG_BARN,
+        HØYERE_UTDANNING_BARN,
+        INDIVIDUELL_JOBBSTØTTE_BARN,
+        INDIVIDUELL_KARRIERESTØTTE_UNG_BARN,
+        JOBBKLUBB_BARN,
+        OPPFØLGING_BARN,
+        UTVIDET_OPPFØLGING_I_NAV_BARN,
+        UTVIDET_OPPFØLGING_I_OPPLÆRING_BARN,
     }
 }
 

@@ -37,6 +37,12 @@ pub async fn produce_utbetaling(uid: Uuid, utbet: Utbetaling<'_>) {
                 let value = serde_json::to_string(&ts).expect("failed to serialize");
                 (topic, producer, value)
             }
+            Utbetaling::Tp(tp) => {
+                let topic = "helved.utbetalinger-tp.v1";
+                let producer = producer("produce-tp-utbetaling");
+                let value = serde_json::to_string(&tp).expect("failed to serialize");
+                (topic, producer, value)
+            }
         };
 
         let key = uid.to_string();
