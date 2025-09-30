@@ -1,6 +1,6 @@
 FROM rust:1.90-slim AS base
 RUN apt-get update \
-    && apt-get install -y pkg-config musl-tools libssl-dev build-essential \
+    && apt-get install -y musl-tools build-essential git cmake pkg-config \
     && rustup target add x86_64-unknown-linux-musl \
     && rm -rf /var/lib/apt/lists/*
 RUN cargo install sccache
@@ -10,6 +10,8 @@ ENV SCCACHE_DIR=/sccache
 ENV RUSTC_WRAPPER=sccache
 
 COPY sccache /sccache
+
+ENV OPENSSL_STATIC=true
 
 COPY Cargo.toml Cargo.lock ./
 RUN mkdir src && echo "fn main(){}" > src/main.rs \
