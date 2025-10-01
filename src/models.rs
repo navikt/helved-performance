@@ -95,6 +95,7 @@ pub mod ts
         personident: String,
         stønad: Stønadtype,
         vedtakstidspunkt: DateTime<Utc>,
+        periodetype: Periodetype,
         perioder: Vec<Periode>,
         bruk_fagområde_tillst: bool,
         saksbehandler: Option<String>,
@@ -107,6 +108,15 @@ pub mod ts
         fom: NaiveDate,
         tom: NaiveDate,
         beløp: u32,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+    pub enum Periodetype {
+        Dag,
+        Ukedag,
+        Mnd,
+        EnGang,
     }
 
     #[allow(non_camel_case_types)]
