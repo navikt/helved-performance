@@ -16,6 +16,12 @@ pub async fn health() -> HttpResponse {
     HttpResponse::Ok().finish()
 }
 
+#[get("/fail")]
+pub async fn fail() -> HttpResponse {
+    log::error!("some log message for testing purpose");
+    HttpResponse::Ok().finish()
+}
+
 #[post("/abetal/aap")]
 pub async fn abetal_aap(
     status_pending: Data<PendingMap<models::status::Reply>>,

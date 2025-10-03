@@ -39,6 +39,7 @@ pub async fn init_server() -> anyhow::Result<()> {
             .service(routes::abetal_ts)
             .service(routes::abetal_tp)
             .service(routes::health)
+            .service(routes::fail)
     })
     .bind(&host)?
     .run()
