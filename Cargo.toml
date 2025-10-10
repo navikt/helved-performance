@@ -15,4 +15,5 @@ uuid = { version = "1.18.1", features = ["serde", "v4"] }
 actix-web = "4.11.0"
 log4rs = { version = "1.4.0", features = ["json_encoder"] }
 log = "0.4.28"
+futures = "0.3.31"
 

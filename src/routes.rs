@@ -1,13 +1,20 @@
-use std::{time::Duration, collections::HashMap, sync::{Arc, Mutex, mpsc}};
-use actix_web::web::{self, Data};
-use actix_web::{get, post, HttpResponse, HttpResponseBuilder};
 use actix_web::http::StatusCode;
-use log::{info};
+use actix_web::web::{self, Data};
+use actix_web::{HttpResponse, HttpResponseBuilder, get, post};
+use futures::future::select_all;
+use log::info;
+use std::sync::mpsc::Receiver;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex, mpsc},
+    time::Duration,
+};
 use uuid::Uuid;
 
 use crate::kafka;
 use crate::models;
-use crate::models::status::{Status};
+use crate::models::dryrun::Simulering;
+use crate::models::status::{Reply, Status};
 
 pub type PendingMap<T> = Arc<Mutex<HashMap<Uuid, mpsc::Sender<T>>>>;
 
@@ -44,27 +51,21 @@ pub async fn abetal_aap(
 
     kafka::produce_utbetaling(key, models::Utbetaling::Aap(&json.0)).await;
 
+    let mut handlers = Vec::new();
+
     if let Some(sim_rx) = sim_rx {
-        match sim_rx.recv_timeout(Duration::from_secs(30)) {
-            Ok(sim) => return HttpResponse::Ok().json(sim),
-            Err(mpsc::RecvTimeoutError::Timeout) => return HttpResponse::RequestTimeout().finish(),
-            Err(_) => return HttpResponse::InternalServerError().finish(),
-        }
+        handlers.push(actix_web::rt::spawn(simulering_handler(sim_rx)));
     }
 
-    match status_rx.recv_timeout(Duration::from_secs(30)) {
-        Ok(reply) => match reply.status {
-            Status::Ok => HttpResponse::Ok().json(reply.status),
-            Status::Mottatt => HttpResponse::Accepted().json(reply.status),
-            Status::HosOppdrag => HttpResponse::Accepted().json(reply.status),
-            Status::Feilet => match reply.error {
-                None => HttpResponse::InternalServerError().finish(),
-                Some(error) => HttpResponseBuilder::new(StatusCode::from_u16(error.status_code).expect("Valid status code")).json(error.msg)
-            }
-        },
-        Err(mpsc::RecvTimeoutError::Timeout) => HttpResponse::RequestTimeout().finish(),
-        Err(_) => HttpResponse::InternalServerError().finish(),
+    handlers.push(actix_web::rt::spawn(status_handler(status_rx)));
+
+    let (first_done, _idx, rest) = select_all(handlers).await;
+
+    for h in rest {
+        h.abort();
     }
+
+    first_done.unwrap_or_else(|_| HttpResponse::InternalServerError().finish())
 }
 
 #[post("/abetal/dp")]
@@ -89,27 +90,21 @@ pub async fn abetal_dp(
 
     kafka::produce_utbetaling(key, models::Utbetaling::Dp(&json.0)).await;
 
+    let mut handlers = Vec::new();
+
     if let Some(sim_rx) = sim_rx {
-        match sim_rx.recv_timeout(Duration::from_secs(30)) {
-            Ok(sim) => return HttpResponse::Ok().json(sim),
-            Err(mpsc::RecvTimeoutError::Timeout) => return HttpResponse::RequestTimeout().finish(),
-            Err(_) => return HttpResponse::InternalServerError().finish(),
-        }
+        handlers.push(actix_web::rt::spawn(simulering_handler(sim_rx)));
     }
 
-    match status_rx.recv_timeout(Duration::from_secs(30)) {
-        Ok(reply) => match reply.status {
-            Status::Ok => HttpResponse::Ok().json(reply.status),
-            Status::Mottatt => HttpResponse::Accepted().json(reply.status),
-            Status::HosOppdrag => HttpResponse::Accepted().json(reply.status),
-            Status::Feilet => match reply.error {
-                None => HttpResponse::InternalServerError().finish(),
-                Some(error) => HttpResponseBuilder::new(StatusCode::from_u16(error.status_code).expect("Valid status code")).json(error.msg)
-            }
-        },
-        Err(mpsc::RecvTimeoutError::Timeout) => HttpResponse::RequestTimeout().finish(),
-        Err(_) => HttpResponse::InternalServerError().finish(),
+    handlers.push(actix_web::rt::spawn(status_handler(status_rx)));
+
+    let (first_done, _idx, rest) = select_all(handlers).await;
+
+    for h in rest {
+        h.abort();
     }
+
+    first_done.unwrap_or_else(|_| HttpResponse::InternalServerError().finish())
 }
 
 #[post("/abetal/ts")]
@@ -134,27 +129,21 @@ pub async fn abetal_ts(
 
     kafka::produce_utbetaling(key, models::Utbetaling::Ts(&json.0)).await;
 
+    let mut handlers = Vec::new();
+
     if let Some(sim_rx) = sim_rx {
-        match sim_rx.recv_timeout(Duration::from_secs(30)) {
-            Ok(sim) => return HttpResponse::Ok().json(sim),
-            Err(mpsc::RecvTimeoutError::Timeout) => return HttpResponse::RequestTimeout().finish(),
-            Err(_) => return HttpResponse::InternalServerError().finish(),
-        }
+        handlers.push(actix_web::rt::spawn(simulering_handler(sim_rx)));
     }
 
-    match status_rx.recv_timeout(Duration::from_secs(30)) {
-        Ok(reply) => match reply.status {
-            Status::Ok => HttpResponse::Ok().json(reply.status),
-            Status::Mottatt => HttpResponse::Accepted().json(reply.status),
-            Status::HosOppdrag => HttpResponse::Accepted().json(reply.status),
-            Status::Feilet => match reply.error {
-                None => HttpResponse::InternalServerError().finish(),
-                Some(error) => HttpResponseBuilder::new(StatusCode::from_u16(error.status_code).expect("Valid status code")).json(error.msg)
-            }
-        },
-        Err(mpsc::RecvTimeoutError::Timeout) => HttpResponse::RequestTimeout().finish(),
-        Err(_) => HttpResponse::InternalServerError().finish(),
+    handlers.push(actix_web::rt::spawn(status_handler(status_rx)));
+
+    let (first_done, _idx, rest) = select_all(handlers).await;
+
+    for h in rest {
+        h.abort();
     }
+
+    first_done.unwrap_or_else(|_| HttpResponse::InternalServerError().finish())
 }
 
 #[post("/abetal/tp")]
@@ -179,14 +168,32 @@ pub async fn abetal_tp(
 
     kafka::produce_utbetaling(key, models::Utbetaling::Tp(&json.0)).await;
 
+    let mut handlers = Vec::new();
+
     if let Some(sim_rx) = sim_rx {
-        match sim_rx.recv_timeout(Duration::from_secs(30)) {
-            Ok(sim) => return HttpResponse::Ok().json(sim),
-            Err(mpsc::RecvTimeoutError::Timeout) => return HttpResponse::RequestTimeout().finish(),
-            Err(_) => return HttpResponse::InternalServerError().finish(),
-        }
+        handlers.push(actix_web::rt::spawn(simulering_handler(sim_rx)));
     }
 
+    handlers.push(actix_web::rt::spawn(status_handler(status_rx)));
+
+    let (first_done, _idx, rest) = select_all(handlers).await;
+
+    for h in rest {
+        h.abort();
+    }
+
+    first_done.unwrap_or_else(|_| HttpResponse::InternalServerError().finish())
+}
+
+async fn simulering_handler(sim_rx: Receiver<Simulering>) -> HttpResponse {
+    match sim_rx.recv_timeout(Duration::from_secs(30)) {
+        Ok(sim) => HttpResponse::Ok().json(sim),
+        Err(mpsc::RecvTimeoutError::Timeout) => HttpResponse::RequestTimeout().finish(),
+        Err(_) => HttpResponse::InternalServerError().finish(),
+    }
+}
+
+async fn status_handler(status_rx: Receiver<Reply>) -> HttpResponse {
     match status_rx.recv_timeout(Duration::from_secs(30)) {
         Ok(reply) => match reply.status {
             Status::Ok => HttpResponse::Ok().json(reply.status),
@@ -194,8 +201,11 @@ pub async fn abetal_tp(
             Status::HosOppdrag => HttpResponse::Accepted().json(reply.status),
             Status::Feilet => match reply.error {
                 None => HttpResponse::InternalServerError().finish(),
-                Some(error) => HttpResponseBuilder::new(StatusCode::from_u16(error.status_code).expect("Valid status code")).json(error.msg)
-            }
+                Some(error) => HttpResponseBuilder::new(
+                    StatusCode::from_u16(error.status_code).expect("Valid status code"),
+                )
+                .json(error.msg),
+            },
         },
         Err(mpsc::RecvTimeoutError::Timeout) => HttpResponse::RequestTimeout().finish(),
         Err(_) => HttpResponse::InternalServerError().finish(),
