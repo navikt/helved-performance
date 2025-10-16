@@ -59,7 +59,6 @@ pub mod dp
         dato: NaiveDate,
         sats: u32,
         utbetalt_beløp: u32,
-        rettighetstype: Rettighetstype,
         utbetalingstype: Utbetalingstype,
     }
 
@@ -67,14 +66,6 @@ pub mod dp
     pub enum Utbetalingstype {
         DagpengerFerietillegg,
         Dagpenger,
-    }
-
-    #[derive(Serialize, Deserialize, Debug)]
-    pub enum Rettighetstype {
-        Ordinær,
-        Permittering,
-        PermitteringFiskeindustrien,
-        EØS,
     }
 }
 
