@@ -1,9 +1,10 @@
 use crate::models::Utbetaling;
 use crate::{
     models::{self, status},
-    routes::PendingMap,
+    routes::{StatusPubSub, SimPubSub},
 };
 use actix_web::rt::time::sleep;
+use tokio::sync::mpsc;
 use log::{error, info};
 use rdkafka::{
     ClientConfig, Message,
@@ -16,7 +17,7 @@ use uuid::Uuid;
 
 const NUM_PARTITIONS: i32 = 3;
 
-pub async fn produce_utbetaling(uid: Uuid, utbet: Utbetaling<'_>) {
+pub async fn produce_utbetaling(uid: Uuid, utbet: Utbetaling) {
     {
         let (topic, producer, value) = match utbet {
             Utbetaling::Aap(aap) => {
@@ -58,7 +59,7 @@ pub async fn produce_utbetaling(uid: Uuid, utbet: Utbetaling<'_>) {
     }
 }
 
-pub async fn status_consumer(status_pending: PendingMap<status::Reply>) {
+pub async fn status_consumer(channel: StatusPubSub) {
     let consumer = consumer("consume_status");
     consumer
         .subscribe(&["helved.status.v1"])
@@ -96,18 +97,42 @@ pub async fn status_consumer(status_pending: PendingMap<status::Reply>) {
                 }
             };
 
-            if let Some(status_tx) = status_pending.lock().unwrap().remove(&uid) {
-                let _ = status_tx.send(reply);
+            if let Some((tx, _)) = channel.lock().await.get(&uid) {
+                let _ = tx.send(reply).await;
             }
         }
 
-        sleep(Duration::from_millis(1)).await;
+        {
+            let mut map = channel.lock().await;
+            let mut uids_to_remove = Vec::new();
+
+            for (uid, (_, rx)) in map.iter_mut() {
+                match rx.try_recv() {
+                    Ok(_) => {
+                        info!("Cleanup signal received for UID: {}", uid);
+                        uids_to_remove.push(*uid);
+                    }
+                    Err(mpsc::error::TryRecvError::Disconnected) => {
+                        info!("Router sender disconnected fro UID: {}", uid);
+                        uids_to_remove.push(*uid);
+                    }
+                    Err(mpsc::error::TryRecvError::Empty) => {
+                        // channel is empty, continue waiting
+                    }
+                }
+            }
+
+            for uid in uids_to_remove {
+                map.remove(&uid);
+                info!("Cleane up channel for UID: {}", uid);
+            }
+        }
     }
 
     // consumer.unsubscribe();
 }
 
-pub async fn dryrun_consumer(simulering_pending: PendingMap<models::dryrun::Simulering>) {
+pub async fn dryrun_consumer(simulering_pending: SimPubSub) {
     let consumer = consumer("consume-dryruns");
     consumer
         .subscribe(&["helved.dryrun-aap.v1", "helved.dryrun-dp.v1"])
@@ -148,8 +173,8 @@ pub async fn dryrun_consumer(simulering_pending: PendingMap<models::dryrun::Simu
                 }
             };
 
-            if let Some(simulering_tx) = simulering_pending.lock().unwrap().remove(&uid) {
-                let _ = simulering_tx.send(simulering);
+            if let Some(simulering_tx) = simulering_pending.lock().await.remove(&uid) {
+                let _ = simulering_tx.send(simulering).await;
             }
         }
 

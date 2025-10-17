@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-
+use std::sync::{Arc };
+use tokio::sync::Mutex;
 use actix_web::web::Data;
 use actix_web::{App, HttpServer};
 use log4rs::append::console::ConsoleAppender;
@@ -8,8 +8,7 @@ use log4rs::config::*;
 use log4rs::encode::json::JsonEncoder;
 use log4rs::init_config;
 
-use crate::models::status;
-use crate::routes::PendingMap;
+use crate::routes::{StatusPubSub, SimPubSub};
 
 mod models;
 mod kafka;
@@ -24,10 +23,10 @@ async fn main() -> anyhow::Result<()> {
 pub async fn init_server() -> anyhow::Result<()> {
     let host = env_or_default("BIND_ADDRESS", "127.0.0.1:8080");
 
-    let status_pending: PendingMap<status::Reply> = Arc::new(Mutex::new(HashMap::new()));
+    let status_pending: StatusPubSub = Arc::new(Mutex::new(HashMap::new()));
     actix_web::rt::spawn(kafka::status_consumer(status_pending.clone()));
 
-    let simulering_pending: PendingMap<models::dryrun::Simulering> = Arc::new(Mutex::new(HashMap::new()));
+    let simulering_pending: SimPubSub = Arc::new(Mutex::new(HashMap::new()));
     actix_web::rt::spawn(kafka::dryrun_consumer(simulering_pending.clone()));
 
     let _ = HttpServer::new(move || {
@@ -39,7 +38,6 @@ pub async fn init_server() -> anyhow::Result<()> {
             .service(routes::abetal_ts)
             .service(routes::abetal_tp)
             .service(routes::health)
-            .service(routes::fail)
     })
     .bind(&host)?
     .run()

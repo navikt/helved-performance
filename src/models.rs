@@ -1,8 +1,16 @@
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum Utbetaling {
+    Aap(aap::Utbetaling),
+    Dp(dp::Utbetaling),
+    Ts(ts::Utbetaling),
+    Tp(tp::Utbetaling),
+}
+
 pub mod aap {
     use chrono::{DateTime, NaiveDate, Utc};
     use serde::{Deserialize, Serialize};
 
-    #[derive(Serialize, Deserialize, Debug)]
+    #[derive(Clone, Serialize, Deserialize, Debug)]
     #[serde(rename_all = "camelCase")]
     pub struct Utbetaling
     {
@@ -16,7 +24,13 @@ pub mod aap {
         beslutter: Option<String>,
     }
 
-    #[derive(Serialize, Deserialize, Debug)]
+    impl From<Utbetaling> for crate::models::Utbetaling {
+        fn from(val: Utbetaling) -> Self {
+            crate::models::Utbetaling::Aap(val)
+        }
+    }
+
+    #[derive(Clone, Serialize, Deserialize, Debug)]
     #[serde(rename_all = "camelCase")]
     pub struct Utbetalingsdag {
         meldeperiode: String,
@@ -26,19 +40,12 @@ pub mod aap {
     }
 }
 
-pub enum Utbetaling<'a> {
-    Aap(&'a aap::Utbetaling),
-    Dp(&'a dp::Utbetaling),
-    Ts(&'a ts::Utbetaling),
-    Tp(&'a tp::Utbetaling),
-}
-
 pub mod dp
 {
     use chrono::{DateTime, NaiveDate, Utc};
     use serde::{Deserialize, Serialize};
 
-    #[derive(Serialize, Deserialize, Debug)]
+    #[derive(Clone, Serialize, Deserialize, Debug)]
     #[serde(rename_all = "camelCase")]
     pub struct Utbetaling 
     {
@@ -52,7 +59,13 @@ pub mod dp
         beslutter: Option<String>,
     }
 
-    #[derive(Serialize, Deserialize, Debug)]
+    impl From<Utbetaling> for crate::models::Utbetaling {
+        fn from(val: Utbetaling) -> Self {
+            crate::models::Utbetaling::Dp(val)
+        }
+    }
+
+    #[derive(Clone, Serialize, Deserialize, Debug)]
     #[serde(rename_all = "camelCase")]
     pub struct Utbetalingsdag {
         meldeperiode: String,
@@ -62,7 +75,7 @@ pub mod dp
         utbetalingstype: Utbetalingstype,
     }
 
-    #[derive(Serialize, Deserialize, Debug)]
+    #[derive(Clone, Serialize, Deserialize, Debug)]
     pub enum Utbetalingstype {
         DagpengerFerietillegg,
         Dagpenger,
@@ -75,7 +88,7 @@ pub mod ts
     use serde::{Deserialize, Serialize};
     use uuid::Uuid;
 
-    #[derive(Serialize, Deserialize, Debug)]
+    #[derive(Clone, Serialize, Deserialize, Debug)]
     #[serde(rename_all = "camelCase")]
     pub struct Utbetaling 
     {
@@ -93,7 +106,13 @@ pub mod ts
         beslutter: Option<String>,
     }
 
-    #[derive(Serialize, Deserialize, Debug)]
+    impl From<Utbetaling> for crate::models::Utbetaling {
+        fn from(val: Utbetaling) -> Self {
+            crate::models::Utbetaling::Ts(val)
+        }
+    }
+
+    #[derive(Clone, Serialize, Deserialize, Debug)]
     #[serde(rename_all = "camelCase")]
     pub struct Periode {
         fom: NaiveDate,
@@ -101,7 +120,7 @@ pub mod ts
         beløp: u32,
     }
 
-    #[derive(Serialize, Deserialize, Debug)]
+    #[derive(Clone, Serialize, Deserialize, Debug)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum Periodetype {
         Dag,
@@ -111,7 +130,7 @@ pub mod ts
     }
 
     #[allow(non_camel_case_types)]
-    #[derive(Serialize, Deserialize, Debug)]
+    #[derive(Clone, Serialize, Deserialize, Debug)]
     pub enum Stønadtype {
         TILSYN_BARN_ENSLIG_FORSØRGER,
         TILSYN_BARN_AAP,
@@ -145,7 +164,7 @@ pub mod tp
     use chrono::{DateTime, NaiveDate, Utc};
     use serde::{Deserialize, Serialize};
 
-    #[derive(Serialize, Deserialize, Debug)]
+    #[derive(Clone, Serialize, Deserialize, Debug)]
     #[serde(rename_all = "camelCase")]
     pub struct Utbetaling 
     {
@@ -160,7 +179,13 @@ pub mod tp
         beslutter: Option<String>,
     }
 
-    #[derive(Serialize, Deserialize, Debug)]
+    impl From<Utbetaling> for crate::models::Utbetaling {
+        fn from(val: Utbetaling) -> Self {
+            crate::models::Utbetaling::Tp(val)
+        }
+    }
+
+    #[derive(Clone, Serialize, Deserialize, Debug)]
     #[serde(rename_all = "camelCase")]
     pub struct Periode {
         meldeperiode: String,
@@ -171,7 +196,7 @@ pub mod tp
 
     #[allow(non_camel_case_types)]
     #[allow(clippy::upper_case_acronyms)]
-    #[derive(Serialize, Deserialize, Debug)]
+    #[derive(Clone, Serialize, Deserialize, Debug)]
     pub enum Stønadtype {
         ARBEIDSFORBEREDENDE_TRENING,
         ARBEIDSRETTET_REHABILITERING,
@@ -225,7 +250,7 @@ pub mod status
     pub struct Error {
         pub status_code: u16,
         pub msg: String,
-        doc: String,
+        pub doc: String,
     }
 
     #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
