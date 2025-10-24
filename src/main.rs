@@ -34,6 +34,7 @@ pub async fn init_server() -> anyhow::Result<()> {
             .app_data(Data::new(status_pending.clone()))
             .app_data(Data::new(simulering_pending.clone()))
             .service(routes::abetal_dp)
+            .service(routes::abetal_dp_tx)
             .service(routes::abetal_aap)
             .service(routes::abetal_ts)
             .service(routes::abetal_tp)

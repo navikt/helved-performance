@@ -30,7 +30,8 @@ pub async fn abetal_aap(
     json: web::Json<models::aap::Utbetaling>,
 ) -> HttpResponse {
     let dryrun = json.0.dryrun.unwrap_or(false);
-    handle_utbetaling(status_pubsub, sim_pubsub, json.0, dryrun).await
+    let tx = Uuid::new_v4();
+    handle_utbetaling(status_pubsub, sim_pubsub, json.0, dryrun, tx).await
 }
 
 #[post("/abetal/dp")]
@@ -40,7 +41,20 @@ pub async fn abetal_dp(
     json: web::Json<models::dp::Utbetaling>,
 ) -> HttpResponse {
     let dryrun = json.0.dryrun.unwrap_or(false);
-    handle_utbetaling(status_pubsub, sim_pubsub, json.0, dryrun).await
+    let tx = Uuid::new_v4();
+    handle_utbetaling(status_pubsub, sim_pubsub, json.0, dryrun, tx).await
+}
+
+#[post("/abetal/dp/{transaction_id}")]
+pub async fn abetal_dp_tx(
+    status_pubsub: Data<StatusPubSub>,
+    sim_pubsub: Data<SimPubSub>,
+    json: web::Json<models::dp::Utbetaling>,
+    path: web::Path<Uuid>,
+) -> HttpResponse {
+    let dryrun = json.0.dryrun.unwrap_or(false);
+    let tx: Uuid = path.into_inner();
+    handle_utbetaling(status_pubsub, sim_pubsub, json.0, dryrun, tx).await
 }
 
 #[post("/abetal/ts")]
@@ -50,7 +64,8 @@ pub async fn abetal_ts(
     json: web::Json<models::ts::Utbetaling>,
 ) -> HttpResponse {
     let dryrun = json.0.dryrun.unwrap_or(false);
-    handle_utbetaling(status_pubsub, sim_pubsub, json.0, dryrun).await
+    let tx = Uuid::new_v4();
+    handle_utbetaling(status_pubsub, sim_pubsub, json.0, dryrun, tx).await
 }
 
 #[post("/abetal/tp")]
@@ -60,7 +75,8 @@ pub async fn abetal_tp(
     json: web::Json<models::tp::Utbetaling>,
 ) -> HttpResponse {
     let dryrun = json.0.dryrun.unwrap_or(false);
-    handle_utbetaling(status_pubsub, sim_pubsub, json.0, dryrun).await
+    let tx = Uuid::new_v4();
+    handle_utbetaling(status_pubsub, sim_pubsub, json.0, dryrun, tx).await
 }
 
 async fn handle_utbetaling<T>(
@@ -68,23 +84,23 @@ async fn handle_utbetaling<T>(
     sim_pubsub: web::Data<SimPubSub>,
     utbetaling: T,
     dryrun: bool,
+    transaction_id: Uuid,
 ) -> HttpResponse 
 where 
     T: Into<models::Utbetaling> + Clone,
 {
-    let uid = Uuid::new_v4();
     let (status_tx, status_rx) = mpsc::channel(100);
     let (actuator_tx, actuator_rx) = mpsc::channel(100);
-    status_pubsub.lock().await.insert(uid, (status_tx, actuator_rx));
+    status_pubsub.lock().await.insert(transaction_id, (status_tx, actuator_rx));
 
     let mut sim_rx_opt = None;
     if dryrun {
         let (sim_tx, sim_rx) = mpsc::channel(100);
-        sim_pubsub.lock().await.insert(uid, sim_tx);
+        sim_pubsub.lock().await.insert(transaction_id, sim_tx);
         sim_rx_opt = Some(sim_rx)
     }
 
-    kafka::produce_utbetaling(uid, utbetaling.into()).await;
+    kafka::produce_utbetaling(transaction_id, utbetaling.into()).await;
 
     let mut handlers = Vec::new();
 
@@ -92,7 +108,7 @@ where
         handlers.push(actix_web::rt::spawn(simulering_handler(sim_rx)));
     }
 
-    handlers.push(actix_web::rt::spawn(status_handler(uid, status_rx, actuator_tx)));
+    handlers.push(actix_web::rt::spawn(status_handler(transaction_id, status_rx, actuator_tx)));
 
     let (first_done, _idx, rest) = select_all(handlers).await;
 
