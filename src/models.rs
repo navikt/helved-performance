@@ -14,7 +14,7 @@ pub mod aap {
     #[serde(rename_all = "camelCase")]
     pub struct Utbetaling
     {
-        pub dryrun: bool,
+        pub dryrun: Option<bool>,
         sak_id: String,
         behandling_id: String,
         ident: String,
@@ -49,7 +49,7 @@ pub mod dp
     #[serde(rename_all = "camelCase")]
     pub struct Utbetaling 
     {
-        pub dryrun: bool,
+        pub dryrun: Option<bool>,
         sak_id: String,
         behandling_id: String,
         ident: String,
@@ -92,7 +92,7 @@ pub mod ts
     #[serde(rename_all = "camelCase")]
     pub struct Utbetaling 
     {
-        pub dryrun: bool,
+        pub dryrun: Option<bool>,
         id: Uuid,
         sak_id: String,
         behandling_id: String,
@@ -168,7 +168,7 @@ pub mod tp
     #[serde(rename_all = "camelCase")]
     pub struct Utbetaling 
     {
-        pub dryrun: bool,
+        pub dryrun: Option<bool>,
         sak_id: String,
         behandling_id: String,
         personident: String,

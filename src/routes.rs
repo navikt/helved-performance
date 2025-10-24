@@ -29,7 +29,7 @@ pub async fn abetal_aap(
     sim_pubsub: Data<SimPubSub>,
     json: web::Json<models::aap::Utbetaling>,
 ) -> HttpResponse {
-    let dryrun = json.0.dryrun;
+    let dryrun = json.0.dryrun.unwrap_or(false);
     handle_utbetaling(status_pubsub, sim_pubsub, json.0, dryrun).await
 }
 
@@ -39,7 +39,7 @@ pub async fn abetal_dp(
     sim_pubsub: Data<SimPubSub>,
     json: web::Json<models::dp::Utbetaling>,
 ) -> HttpResponse {
-    let dryrun = json.0.dryrun;
+    let dryrun = json.0.dryrun.unwrap_or(false);
     handle_utbetaling(status_pubsub, sim_pubsub, json.0, dryrun).await
 }
 
@@ -49,7 +49,7 @@ pub async fn abetal_ts(
     sim_pubsub: Data<SimPubSub>,
     json: web::Json<models::ts::Utbetaling>,
 ) -> HttpResponse {
-    let dryrun = json.0.dryrun;
+    let dryrun = json.0.dryrun.unwrap_or(false);
     handle_utbetaling(status_pubsub, sim_pubsub, json.0, dryrun).await
 }
 
@@ -59,7 +59,7 @@ pub async fn abetal_tp(
     sim_pubsub: Data<SimPubSub>,
     json: web::Json<models::tp::Utbetaling>,
 ) -> HttpResponse {
-    let dryrun = json.0.dryrun;
+    let dryrun = json.0.dryrun.unwrap_or(false);
     handle_utbetaling(status_pubsub, sim_pubsub, json.0, dryrun).await
 }
 
