@@ -68,6 +68,17 @@ pub async fn abetal_ts(
     handle_utbetaling(status_pubsub, sim_pubsub, json.0, dryrun, tx).await
 }
 
+#[post("/abetal/historisk")]
+pub async fn abetal_historisk(
+    status_pubsub: Data<StatusPubSub>,
+    sim_pubsub: Data<SimPubSub>,
+    json: web::Json<models::historisk::Utbetaling>,
+) -> HttpResponse {
+    let dryrun = json.0.dryrun.unwrap_or(false);
+    let tx = Uuid::new_v4();
+    handle_utbetaling(status_pubsub, sim_pubsub, json.0, dryrun, tx).await
+}
+
 #[post("/abetal/tp")]
 pub async fn abetal_tp(
     status_pubsub: Data<StatusPubSub>,

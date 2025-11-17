@@ -4,6 +4,7 @@ pub enum Utbetaling {
     Dp(dp::Utbetaling),
     Ts(ts::Utbetaling),
     Tp(tp::Utbetaling),
+    Historisk(historisk::Utbetaling),
 }
 
 pub mod aap {
@@ -159,6 +160,59 @@ pub mod ts
     }
 }
 
+pub mod historisk
+{
+    use chrono::{DateTime, NaiveDate, Utc};
+    use serde::{Deserialize, Serialize};
+    use uuid::Uuid;
+
+    #[derive(Clone, Serialize, Deserialize, Debug)]
+    #[serde(rename_all = "camelCase")]
+    pub struct Utbetaling
+    {
+        pub dryrun: Option<bool>,
+        id: Uuid,
+        sak_id: String,
+        behandling_id: String,
+        personident: String,
+        stønad: Stønadtype,
+        vedtakstidspunkt: DateTime<Utc>,
+        periodetype: Periodetype,
+        perioder: Vec<Periode>,
+        saksbehandler: Option<String>,
+        beslutter: Option<String>,
+    }
+
+    impl From<Utbetaling> for crate::models::Utbetaling {
+        fn from(val: Utbetaling) -> Self {
+            crate::models::Utbetaling::Historisk(val)
+        }
+    }
+
+    #[derive(Clone, Serialize, Deserialize, Debug)]
+    #[serde(rename_all = "camelCase")]
+    pub struct Periode {
+        fom: NaiveDate,
+        tom: NaiveDate,
+        beløp: u32,
+    }
+
+    #[derive(Clone, Serialize, Deserialize, Debug)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+    pub enum Periodetype {
+        Dag,
+        Ukedag,
+        Mnd,
+        EnGang,
+    }
+
+    #[allow(non_camel_case_types)]
+    #[derive(Clone, Serialize, Deserialize, Debug)]
+    pub enum Stønadtype {
+        TILSKUDD_SMÅHJELPEMIDLER
+    }
+}
+
 pub mod tp
 {
     use chrono::{DateTime, NaiveDate, Utc};
@@ -235,7 +289,7 @@ pub mod tp
     }
 }
 
-pub mod status 
+pub mod status
 {
     use serde::{Deserialize, Serialize};
 
