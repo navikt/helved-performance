@@ -16,10 +16,10 @@ spec:
     min: 1
   resources:
     requests:
-      cpu: 20m
+      cpu: 15m
       memory: 24Mi
     limits:
-      memory: 128Mi
+      memory: 48Mi
   azure:
     application:
       enabled: true
