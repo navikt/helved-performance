@@ -192,25 +192,13 @@ pub async fn dryrun_consumer(simulering_pending: SimPubSub) {
 
 fn producer(client_id: &str) -> FutureProducer {
     ClientConfig::new()
-        .set(
-            "bootstrap.servers",
-            env::var("KAFKA_BROKERS").expect("KAFKA_BROKERS"),
-        )
+        .set("bootstrap.servers", env::var("KAFKA_BROKERS").expect("KAFKA_BROKERS"))
         .set("client.id", client_id.to_owned())
         .set("security.protocol", "ssl")
         .set("compression.codec", "snappy")
-        .set(
-            "ssl.key.location",
-            env::var("KAFKA_PRIVATE_KEY_PATH").expect("KAFKA_PRIVATE_KEY_PATH"),
-        )
-        .set(
-            "ssl.certificate.location",
-            env::var("KAFKA_CERTIFICATE_PATH").expect("KAFKA_CERTIFICATE_PATH"),
-        )
-        .set(
-            "ssl.ca.location",
-            env::var("KAFKA_CA_PATH").expect("KAFKA_CA_PATH"),
-        )
+        .set("ssl.key.location", env::var("KAFKA_PRIVATE_KEY_PATH").expect("KAFKA_PRIVATE_KEY_PATH"))
+        .set("ssl.certificate.location", env::var("KAFKA_CERTIFICATE_PATH").expect("KAFKA_CERTIFICATE_PATH"))
+        .set("ssl.ca.location", env::var("KAFKA_CA_PATH").expect("KAFKA_CA_PATH"))
         .create()
         .unwrap_or_else(|_| {
             error!("Failed to create kafka producer {client_id}");
@@ -220,29 +208,18 @@ fn producer(client_id: &str) -> FutureProducer {
 
 fn consumer(client_id: &str) -> BaseConsumer {
     ClientConfig::new()
-        .set(
-            "bootstrap.servers",
-            env::var("KAFKA_BROKERS").expect("KAFKA_BROKERS"),
-        )
+        .set("bootstrap.servers", env::var("KAFKA_BROKERS").expect("KAFKA_BROKERS"))
         .set("client.id", client_id.to_owned())
         .set("group.id", format!("{}-consumer", &client_id))
         .set("auto.offset.reset", "latest")
         .set("enable.auto.commit", "false")
         .set("socket.keepalive.enable", "true")
-        .set("session.timeout.ms", "6000")
+        .set("session.timeout.ms", "90000")
+        .set("heartbeat.interval.ms", "10000")
         .set("security.protocol", "ssl")
-        .set(
-            "ssl.key.location",
-            env::var("KAFKA_PRIVATE_KEY_PATH").expect("KAFKA_PRIVATE_KEY_PATH"),
-        )
-        .set(
-            "ssl.certificate.location",
-            env::var("KAFKA_CERTIFICATE_PATH").expect("KAFKA_CERTIFICATE_PATH"),
-        )
-        .set(
-            "ssl.ca.location",
-            env::var("KAFKA_CA_PATH").expect("KAFKA_CA_PATH"),
-        )
+        .set("ssl.key.location", env::var("KAFKA_PRIVATE_KEY_PATH").expect("KAFKA_PRIVATE_KEY_PATH"))
+        .set("ssl.certificate.location", env::var("KAFKA_CERTIFICATE_PATH").expect("KAFKA_CERTIFICATE_PATH"))
+        .set("ssl.ca.location", env::var("KAFKA_CA_PATH").expect("KAFKA_CA_PATH"))
         .create()
         .unwrap_or_else(|_| panic!("Failed to create kafka consumer {client_id}"))
 }
