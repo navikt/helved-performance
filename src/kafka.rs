@@ -228,6 +228,7 @@ fn consumer(client_id: &str) -> BaseConsumer {
         .set("group.id", format!("{}-consumer", &client_id))
         .set("auto.offset.reset", "latest")
         .set("enable.auto.commit", "false")
+        .set("socket.keepalive.enable", "true")
         .set("session.timeout.ms", "6000")
         .set("security.protocol", "ssl")
         .set(
