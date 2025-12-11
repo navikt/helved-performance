@@ -245,6 +245,7 @@ pub mod tp
         meldeperiode: String,
         fom: NaiveDate,
         tom: NaiveDate,
+        betalende_enhet: Option<String>,
         beløp: u32,
     }
 
