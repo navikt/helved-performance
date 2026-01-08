@@ -119,6 +119,7 @@ pub mod ts
         fom: NaiveDate,
         tom: NaiveDate,
         beløp: u32,
+        betalende_enhet: Option<String>,
     }
 
     #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -157,6 +158,24 @@ pub mod ts
         FLYTTING_ENSLIG_FORSØRGER,
         FLYTTING_AAP,
         FLYTTING_ETTERLATTE,
+
+        DAGLIG_REISE_TILTAK_ARBEIDSFORBEREDENDE,
+        DAGLIG_REISE_TILTAK_ARBEIDSRETTET_REHAB,
+        DAGLIG_REISE_TILTAK_ARBEIDSTRENING,
+        DAGLIG_REISE_TILTAK_AVKLARING,
+        DAGLIG_REISE_TILTAK_DIGITAL_JOBBKLUBB,
+        DAGLIG_REISE_TILTAK_ENKELTPLASS_AMO,
+        DAGLIG_REISE_TILTAK_ENKELTPLASS_FAG_YRKE_HOYERE_UTD,
+        DAGLIG_REISE_TILTAK_FORSØK_OPPLÆRINGSTILTAK_LENGER_VARIGHET,
+        DAGLIG_REISE_TILTAK_GRUPPE_AMO,
+        DAGLIG_REISE_TILTAK_GRUPPE_FAG_YRKE_HOYERE_UTD,
+        DAGLIG_REISE_TILTAK_HØYERE_UTDANNING,
+        DAGLIG_REISE_TILTAK_INDIVIDUELL_JOBBSTØTTE,
+        DAGLIG_REISE_TILTAK_INDIVIDUELL_JOBBSTØTTE_UNG,
+        DAGLIG_REISE_TILTAK_JOBBKLUBB,
+        DAGLIG_REISE_TILTAK_OPPFØLGING,
+        DAGLIG_REISE_TILTAK_UTVIDET_OPPFØLGING_I_NAV,
+        DAGLIG_REISE_TILTAK_UTVIDET_OPPFØLGING_I_OPPLÆRING,
     }
 }
 
@@ -226,7 +245,6 @@ pub mod tp
         sak_id: String,
         behandling_id: String,
         personident: String,
-        stønad: Stønadtype,
         vedtakstidspunkt: DateTime<Utc>,
         perioder: Vec<Periode>,
         saksbehandler: Option<String>,
@@ -245,9 +263,9 @@ pub mod tp
         meldeperiode: String,
         fom: NaiveDate,
         tom: NaiveDate,
-        barnetillegg: Option<bool>,
         betalende_enhet: Option<String>,
         beløp: u32,
+        stønad: Stønadtype,
     }
 
     #[allow(non_camel_case_types)]
