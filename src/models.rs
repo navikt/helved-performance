@@ -94,17 +94,14 @@ pub mod ts
     pub struct Utbetaling 
     {
         pub dryrun: Option<bool>,
-        id: Uuid,
         sak_id: String,
         behandling_id: String,
         personident: String,
-        stønad: Stønadtype,
         vedtakstidspunkt: DateTime<Utc>,
         periodetype: Periodetype,
-        perioder: Vec<Periode>,
-        bruk_fagområde_tillst: bool,
         saksbehandler: Option<String>,
         beslutter: Option<String>,
+        utbetalinger: Vec<TsUtbetaling>,
     }
 
     impl From<Utbetaling> for crate::models::Utbetaling {
@@ -115,7 +112,16 @@ pub mod ts
 
     #[derive(Clone, Serialize, Deserialize, Debug)]
     #[serde(rename_all = "camelCase")]
-    pub struct Periode {
+    pub struct TsUtbetaling {
+        id: Uuid,
+        stønad: Stønadtype,
+        perioder: Vec<TsPeriode>,
+        bruk_fagområde_tillst: bool,
+    }
+
+    #[derive(Clone, Serialize, Deserialize, Debug)]
+    #[serde(rename_all = "camelCase")]
+    pub struct TsPeriode {
         fom: NaiveDate,
         tom: NaiveDate,
         beløp: u32,
