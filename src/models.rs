@@ -270,6 +270,7 @@ pub mod tp
         fom: NaiveDate,
         tom: NaiveDate,
         betalende_enhet: Option<String>,
+        barnetillegg: Option<bool>,
         beløp: u32,
         stønad: Stønadtype,
     }
