@@ -234,7 +234,17 @@ pub mod historisk
     #[allow(non_camel_case_types)]
     #[derive(Clone, Serialize, Deserialize, Debug)]
     pub enum Stønadtype {
-        TILSKUDD_SMÅHJELPEMIDLER
+        TILSKUDD_SMÅHJELPEMIDLER,
+        REISEUTGIFTER,
+        ORTOPEDISK_PROTESE,
+        ORTOSE,
+        SPESIALSKO,
+        PARYKK,
+        ANSIKTSDEFEKTPROTESE,
+        BRYSTPROTESE,
+        ØYEPROTESE,
+        VANLIGE_SKO,
+        FOTSENG
     }
 }
 
